@@ -22,6 +22,7 @@
  */
 package com.pragmatickm.task.servlet;
 
+import com.aoindustries.util.ComparatorUtils;
 import com.aoindustries.util.StringUtility;
 import com.aoindustries.util.UnmodifiableCalendar;
 import com.aoindustries.util.WrappedException;
@@ -306,7 +307,7 @@ final public class TaskUtil {
 					Task.StatusResult status2 = t2.getStatus();
 					Calendar date1 = status1.getDate();
 					Calendar date2 = status2.getDate();
-					int diff = Boolean.compare(date2!=null, date1!=null);
+					int diff = ComparatorUtils.compare(date2!=null, date1!=null);
 					if(diff!=0) return diff;
 					// Then sort by date (if have date in both statuses)
 					if(date1!=null && date2!=null) {
