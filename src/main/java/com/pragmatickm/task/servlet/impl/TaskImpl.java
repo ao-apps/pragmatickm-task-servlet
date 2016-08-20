@@ -191,7 +191,7 @@ final public class TaskImpl {
 			writeRow("Assigned To:", task.getAssignedTo(), out);
 			writeRow("Pay:", task.getPay(), out);
 			writeRow("Cost:", task.getCost(), out);
-			List<? extends Task> doAfters = TaskUtil.getDoAfters(servletContext, request, response, task);
+			List<Task> doAfters = TaskUtil.getDoAfters(servletContext, request, response, task);
 			writeTasks(request, response, out, currentPage, now, doAfters, "Do After:");
 		}
 	}

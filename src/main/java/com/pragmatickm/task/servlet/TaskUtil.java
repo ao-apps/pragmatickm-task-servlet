@@ -115,7 +115,7 @@ final public class TaskUtil {
 	 * This requires a capture of the entire page tree
 	 * meta data to find any task that has a doBefore pointing to this task.
 	 */
-	public static List<? extends Task> getDoAfters(
+	public static List<Task> getDoAfters(
 		ServletContext servletContext,
 		HttpServletRequest request,
 		HttpServletResponse response,
@@ -176,7 +176,7 @@ final public class TaskUtil {
 		}
 	}
 
-	public static Set<? extends User> getAllUsers() {
+	public static Set<User> getAllUsers() {
 		return EnumSet.allOf(User.class);
 	}
 
@@ -240,7 +240,7 @@ final public class TaskUtil {
 		return effective;
 	}
 
-	public static List<? extends Task> prioritizeTasks(
+	public static List<Task> prioritizeTasks(
 		ServletContext servletContext,
 		HttpServletRequest request,
 		HttpServletResponse response,
@@ -249,7 +249,7 @@ final public class TaskUtil {
 	) throws ServletException, IOException, TaskException {
 		final long now = System.currentTimeMillis();
 		// Priority inheritance
-		List<? extends Task> allTasks = getAllTasks(
+		List<Task> allTasks = getAllTasks(
 			servletContext,
 			request,
 			response,
@@ -349,7 +349,7 @@ final public class TaskUtil {
 		return Collections.unmodifiableList(sortedTasks);
 	}
 
-	public static List<? extends Task> getAllTasks(
+	public static List<Task> getAllTasks(
 		ServletContext servletContext,
 		HttpServletRequest request,
 		HttpServletResponse response,
@@ -515,7 +515,7 @@ final public class TaskUtil {
 		return false;
 	}
 
-	public static List<? extends Task> getReadyTasks(
+	public static List<Task> getReadyTasks(
 		ServletContext servletContext,
 		HttpServletRequest request,
 		HttpServletResponse response,
@@ -577,7 +577,7 @@ final public class TaskUtil {
 		return Collections.unmodifiableList(readyTasks);
 	}
 
-	public static List<? extends Task> getBlockedTasks(
+	public static List<Task> getBlockedTasks(
 		ServletContext servletContext,
 		HttpServletRequest request,
 		HttpServletResponse response,
@@ -640,7 +640,7 @@ final public class TaskUtil {
 		return Collections.unmodifiableList(blockedTasks);
 	}
 
-	public static List<? extends Task> getFutureTasks(
+	public static List<Task> getFutureTasks(
 		ServletContext servletContext,
 		HttpServletRequest request,
 		HttpServletResponse response,
