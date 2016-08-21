@@ -43,6 +43,7 @@ import com.semanticcms.core.model.PageRef;
 import com.semanticcms.core.servlet.CaptureLevel;
 import com.semanticcms.core.servlet.CurrentPage;
 import com.semanticcms.core.servlet.PageIndex;
+import com.semanticcms.core.servlet.SemanticCMS;
 import java.io.IOException;
 import java.io.Writer;
 import java.util.ArrayList;
@@ -153,7 +154,7 @@ final public class TaskImpl {
 					+ "<tbody>\n");
 			List<TaskLookup> doBeforeLookups = task.getDoBefores();
 			final long now = System.currentTimeMillis();
-			writeTaskLookups(request, response, out, currentPage, now, doBeforeLookups, "Do Before:");
+			writeTaskLookups(servletContext, request, response, out, currentPage, now, doBeforeLookups, "Do Before:");
 			out.write("<tr><th>Status:</th><td class=\"");
 			Task.StatusResult status = task.getStatus();
 			encodeTextInXhtmlAttribute(status.getCssClass().name(), out);
@@ -192,7 +193,7 @@ final public class TaskImpl {
 			writeRow("Pay:", task.getPay(), out);
 			writeRow("Cost:", task.getCost(), out);
 			List<Task> doAfters = TaskUtil.getDoAfters(servletContext, request, response, task);
-			writeTasks(request, response, out, currentPage, now, doAfters, "Do After:");
+			writeTasks(servletContext, request, response, out, currentPage, now, doAfters, "Do After:");
 		}
 	}
 
@@ -222,6 +223,7 @@ final public class TaskImpl {
 	}
 
 	private static void writeTasks(
+		ServletContext servletContext,
 		HttpServletRequest request,
 		HttpServletResponse response,
 		Writer out,
@@ -232,6 +234,7 @@ final public class TaskImpl {
 	) throws IOException, TaskException {
 		int size = tasks.size();
 		if(size>0) {
+			SemanticCMS semanticCMS = SemanticCMS.getInstance(servletContext);
 			for(int i=0; i<size; i++) {
 				final Task task = tasks.get(i);
 				final Page taskPage = task.getPage();
@@ -258,7 +261,14 @@ final public class TaskImpl {
 				encodeTextInXhtmlAttribute(priority.getCssClass(), out);
 				out.write("\">");
 				encodeTextInXhtml(priority.toString(), out);
-				out.write("</td><td><a class=\"taskLink\" href=\"");
+				out.write("</td><td><a");
+				String linkCssClass = semanticCMS.getLinkCssClass(task);
+				if(linkCssClass != null) {
+					out.write(" class=\"");
+					encodeTextInXhtmlAttribute(linkCssClass, out);
+					out.write('"');
+				}
+				out.write(" href=\"");
 				PageIndex pageIndex = PageIndex.getCurrentPageIndex(request);
 				Integer index = pageIndex==null ? null : pageIndex.getPageIndex(taskPage.getPageRef());
 				if(index != null) {
@@ -300,6 +310,7 @@ final public class TaskImpl {
 	}
 
 	private static void writeTaskLookups(
+		ServletContext servletContext,
 		HttpServletRequest request,
 		HttpServletResponse response,
 		Writer out,
@@ -313,6 +324,7 @@ final public class TaskImpl {
 			List<Task> tasks = new ArrayList<Task>(size);
 			for(TaskLookup taskLookup : taskLookups) tasks.add(taskLookup.getTask());
 			writeTasks(
+				servletContext,
 				request,
 				response,
 				out,
