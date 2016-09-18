@@ -123,41 +123,52 @@ final public class TaskUtil {
 	) throws ServletException, IOException, TaskException {
 		final String taskId = task.getId();
 		final Page taskPage = task.getPage();
-		List<Task> doAfters = null;
-		for(
-			Page page
-			: PageDags.convertPageDagToList(
+		final List<Task> doAfters = new ArrayList<Task>();
+		try {
+			CapturePage.traversePagesDepthFirst(
 				servletContext,
 				request,
 				response,
-				CapturePage.capturePage(
-					servletContext,
-					request,
-					response,
-					SemanticCMS.getInstance(servletContext).getRootBook().getContentRoot(),
-					CaptureLevel.META
-				),
-				CaptureLevel.META
-			)
-		) {
-			for(Element element : page.getElements()) {
-				if(element instanceof Task) {
-					Task pageTask = (Task)element;
-					for(TaskLookup doBeforeLookup : pageTask.getDoBefores()) {
-						Task doBefore = doBeforeLookup.getTask();
-						if(
-							doBefore.getPage().equals(taskPage)
-							&& doBefore.getId().equals(taskId)
-						) {
-							if(doAfters == null) doAfters = new ArrayList<Task>();
-							doAfters.add(pageTask);
+				SemanticCMS.getInstance(servletContext).getRootBook().getContentRoot(),
+				CaptureLevel.META,
+				new CapturePage.PageHandler() {
+					@Override
+					public void handlePage(Page page) throws ServletException, IOException {
+						try {
+							for(Element element : page.getElements()) {
+								if(element instanceof Task) {
+									Task pageTask = (Task)element;
+									for(TaskLookup doBeforeLookup : pageTask.getDoBefores()) {
+										Task doBefore = doBeforeLookup.getTask();
+										if(
+											doBefore.getPage().equals(taskPage)
+											&& doBefore.getId().equals(taskId)
+										) {
+											doAfters.add(pageTask);
+										}
+									}
+								}
+							}
+						} catch(TaskException e) {
+							throw new WrappedException(e);
 						}
 					}
-				}
-			}
+				},
+				new CapturePage.ChildPageFilter() {
+					@Override
+					public boolean includeChildPage(Page page, PageRef childRef) {
+						// Child not in missing book
+						return childRef.getBook() != null;
+					}
+				},
+				null
+			);
+			return Collections.unmodifiableList(doAfters);
+		} catch(WrappedException e) {
+			Throwable cause = e.getCause();
+			if(cause instanceof TaskException) throw (TaskException)cause;
+			throw e;
 		}
-		if(doAfters == null) return Collections.emptyList();
-		else return doAfters;
 	}
 
 	public static User getUser(
