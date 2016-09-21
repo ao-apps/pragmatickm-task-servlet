@@ -41,10 +41,12 @@ import com.semanticcms.core.servlet.CaptureLevel;
 import com.semanticcms.core.servlet.CapturePage;
 import com.semanticcms.core.servlet.PageDags;
 import com.semanticcms.core.servlet.PageRefResolver;
+import com.semanticcms.core.servlet.PageUtils;
 import com.semanticcms.core.servlet.SemanticCMS;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Calendar;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.EnumSet;
@@ -154,11 +156,11 @@ final public class TaskUtil {
 						}
 					}
 				},
-				new CapturePage.ChildPageFilter() {
+				new CapturePage.TraversalEdges() {
 					@Override
-					public boolean includeChildPage(Page page, PageRef childRef) {
+					public Collection<PageRef> getEdges(Page page) {
 						// Child not in missing book
-						return childRef.getBook() != null;
+						return PageUtils.filterNotMissingBook(page.getChildPages());
 					}
 				},
 				null
