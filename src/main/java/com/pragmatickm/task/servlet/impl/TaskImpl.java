@@ -107,37 +107,8 @@ final public class TaskImpl {
 		}
 	}
 
-	/**
-	 * @param style  May not be a ValueExpression
-	 */
 	public static void writeBeforeBody(
 		ServletContext servletContext,
-		HttpServletRequest request,
-		HttpServletResponse response,
-		CaptureLevel captureLevel,
-		Writer out,
-		Task task,
-		Object style
-	) throws TaskException, IOException, ServletException {
-		if(style instanceof ValueExpression) throw new IllegalArgumentException("style may not be a ValueExpression, use other method that takes ELContext");
-		writeBeforeBody(
-			servletContext,
-			null,
-			request,
-			response,
-			captureLevel,
-			out,
-			task,
-			style
-		);
-	}
-
-	/**
-	 * @param style  either Object of ValueExpression that returns Object
-	 */
-	public static void writeBeforeBody(
-		ServletContext servletContext,
-		ELContext elContext,
 		HttpServletRequest request,
 		HttpServletResponse response,
 		CaptureLevel captureLevel,
@@ -165,9 +136,6 @@ final public class TaskImpl {
 		}
 
 		if(captureLevel == CaptureLevel.BODY) {
-			// Evaluate expressions
-			Object styleObj = Coercion.nullIfEmpty(resolveValue(style, Object.class, elContext));
-
 			// Write the task itself to this page
 			final PageIndex pageIndex = PageIndex.getCurrentPageIndex(request);
 			out.write("<table id=\"");
@@ -178,9 +146,10 @@ final public class TaskImpl {
 				new MediaWriter(TextInXhtmlAttributeEncoder.textInXhtmlAttributeEncoder, out)
 			);
 			out.write("\" class=\"thinTable taskTable\"");
-			if(styleObj != null) {
+			style = Coercion.nullIfEmpty(style);
+			if(style != null) {
 				out.write(" style=\"");
-				Coercion.write(styleObj, textInXhtmlAttributeEncoder, out);
+				Coercion.write(style, textInXhtmlAttributeEncoder, out);
 				out.write('"');
 			}
 			out.write(">\n"
@@ -231,6 +200,30 @@ final public class TaskImpl {
 			List<Task> doAfters = TaskUtil.getDoAfters(servletContext, request, response, task);
 			writeTasks(servletContext, request, response, out, currentPage, now, doAfters, "Do After:");
 		}
+	}
+
+	/**
+	 * @param style  ValueExpression that returns Object, only evaluated for BODY capture level
+	 */
+	public static void writeBeforeBody(
+		ServletContext servletContext,
+		ELContext elContext,
+		HttpServletRequest request,
+		HttpServletResponse response,
+		CaptureLevel captureLevel,
+		Writer out,
+		Task task,
+		ValueExpression style
+	) throws TaskException, IOException, ServletException {
+		writeBeforeBody(
+			servletContext,
+			request,
+			response,
+			captureLevel,
+			out,
+			task,
+			captureLevel == CaptureLevel.BODY ? resolveValue(style, Object.class, elContext) : null
+		);
 	}
 
 	public static void writeAfterBody(Task task, Writer out, ElementContext context) throws IOException {
