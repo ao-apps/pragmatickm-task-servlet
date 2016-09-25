@@ -22,12 +22,14 @@
  */
 package com.pragmatickm.task.servlet.impl;
 
+import com.aoindustries.encoding.Coercion;
 import com.aoindustries.encoding.MediaWriter;
 import com.aoindustries.encoding.TextInXhtmlAttributeEncoder;
 import static com.aoindustries.encoding.TextInXhtmlAttributeEncoder.encodeTextInXhtmlAttribute;
 import static com.aoindustries.encoding.TextInXhtmlAttributeEncoder.textInXhtmlAttributeEncoder;
 import static com.aoindustries.encoding.TextInXhtmlEncoder.encodeTextInXhtml;
 import com.aoindustries.io.buffer.BufferResult;
+import static com.aoindustries.taglib.AttributeUtils.resolveValue;
 import com.aoindustries.util.CalendarUtils;
 import com.aoindustries.util.schedule.Recurring;
 import com.pragmatickm.task.model.Priority;
@@ -49,6 +51,8 @@ import java.io.Writer;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.List;
+import javax.el.ELContext;
+import javax.el.ValueExpression;
 import javax.servlet.ServletContext;
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
@@ -103,6 +107,9 @@ final public class TaskImpl {
 		}
 	}
 
+	/**
+	 * @param style  May not be a ValueExpression
+	 */
 	public static void writeBeforeBody(
 		ServletContext servletContext,
 		HttpServletRequest request,
@@ -110,7 +117,33 @@ final public class TaskImpl {
 		CaptureLevel captureLevel,
 		Writer out,
 		Task task,
-		String style
+		Object style
+	) throws TaskException, IOException, ServletException {
+		if(style instanceof ValueExpression) throw new IllegalArgumentException("style may not be a ValueExpression, use other method that takes ELContext");
+		writeBeforeBody(
+			servletContext,
+			null,
+			request,
+			response,
+			captureLevel,
+			out,
+			task,
+			style
+		);
+	}
+
+	/**
+	 * @param style  either Object of ValueExpression that returns Object
+	 */
+	public static void writeBeforeBody(
+		ServletContext servletContext,
+		ELContext elContext,
+		HttpServletRequest request,
+		HttpServletResponse response,
+		CaptureLevel captureLevel,
+		Writer out,
+		Task task,
+		Object style
 	) throws TaskException, IOException, ServletException {
 		final Page currentPage = CurrentPage.getCurrentPage(request);
 
@@ -132,6 +165,9 @@ final public class TaskImpl {
 		}
 
 		if(captureLevel == CaptureLevel.BODY) {
+			// Evaluate expressions
+			Object styleObj = Coercion.nullIfEmpty(resolveValue(style, Object.class, elContext));
+
 			// Write the task itself to this page
 			final PageIndex pageIndex = PageIndex.getCurrentPageIndex(request);
 			out.write("<table id=\"");
@@ -142,9 +178,9 @@ final public class TaskImpl {
 				new MediaWriter(TextInXhtmlAttributeEncoder.textInXhtmlAttributeEncoder, out)
 			);
 			out.write("\" class=\"thinTable taskTable\"");
-			if(style!=null) {
+			if(styleObj != null) {
 				out.write(" style=\"");
-				encodeTextInXhtmlAttribute(style, out);
+				Coercion.write(styleObj, textInXhtmlAttributeEncoder, out);
 				out.write('"');
 			}
 			out.write(">\n"
