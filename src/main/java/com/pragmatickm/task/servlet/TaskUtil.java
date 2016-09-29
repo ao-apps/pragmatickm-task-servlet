@@ -318,23 +318,23 @@ final public class TaskUtil {
 		Priority cached = effectivePriorities.get(task);
 		if(cached != null) return cached;
 		// Find the maximum priority of this task and all that will be done after it
-		Priority effective;
-		if(status.getDate() != null) {
-			effective = task.getPriority(status.getDate(), now);
-		} else {
-			effective = task.getZeroDayPriority();
-		}
-		List<Task> doAfters = doAftersByTask.get(task);
-		if(doAfters != null) {
-			for(Task doAfter : doAfters) {
-				Task.StatusResult doAfterStatus = doAfter.getStatus();
-				if(
-					!doAfterStatus.isCompletedSchedule()
-					&& !doAfterStatus.isReadySchedule()
-					&& !doAfterStatus.isFutureSchedule()
-				) {
-					Priority inherited = getEffectivePriority(now, doAfter, doAfterStatus, doAftersByTask, effectivePriorities);
-					if(inherited.compareTo(effective) > 0) effective = inherited;
+		Priority effective = TaskImpl.getPriorityForStatus(now, task, status);
+		if(effective != Priority.MAX_PRIORITY) {
+			List<Task> doAfters = doAftersByTask.get(task);
+			if(doAfters != null) {
+				for(Task doAfter : doAfters) {
+					Task.StatusResult doAfterStatus = doAfter.getStatus();
+					if(
+						!doAfterStatus.isCompletedSchedule()
+						&& !doAfterStatus.isReadySchedule()
+						&& !doAfterStatus.isFutureSchedule()
+					) {
+						Priority inherited = getEffectivePriority(now, doAfter, doAfterStatus, doAftersByTask, effectivePriorities);
+						if(inherited.compareTo(effective) > 0) {
+							effective = inherited;
+							if(effective == Priority.MAX_PRIORITY) break;
+						}
+					}
 				}
 			}
 		}
@@ -527,67 +527,72 @@ final public class TaskUtil {
 									|| assignedTo != null
 								) {
 									Task.StatusResult status = task.getStatus();
-									Priority priority;
-									if(status.getDate() != null) {
-										priority = task.getPriority(status.getDate(), now);
-									} else {
-										priority = task.getZeroDayPriority();
-									}
+									Priority priority = null;
 									// getReadyTasks logic
 									if(
-										priority != Priority.FUTURE
-										&& !status.isCompletedSchedule()
+										!status.isCompletedSchedule()
 										&& status.isReadySchedule()
 									) {
-										if(
-											status.getDate() != null
-											&& assignedTo != null
-											&& assignedTo.getAfter().getCount() > 0
-										) {
-											// assignedTo "after"
-											Calendar effectiveDate = UnmodifiableCalendar.unwrapClone(status.getDate());
-											assignedTo.getAfter().offset(effectiveDate);
-											if(now >= effectiveDate.getTimeInMillis()) {
+										priority = TaskImpl.getPriorityForStatus(now, task, status);
+										if(priority != Priority.FUTURE) {
+											if(
+												status.getDate() != null
+												&& assignedTo != null
+												&& assignedTo.getAfter().getCount() > 0
+											) {
+												// assignedTo "after"
+												Calendar effectiveDate = UnmodifiableCalendar.unwrapClone(status.getDate());
+												assignedTo.getAfter().offset(effectiveDate);
+												if(now >= effectiveDate.getTimeInMillis()) {
+													return true;
+												}
+											} else {
+												// No time offset
 												return true;
 											}
-										} else {
-											// No time offset
-											return true;
 										}
 									}
 									// getBlockedTasks logic
 									if(
-										priority != Priority.FUTURE
-										&& !status.isCompletedSchedule()
+										!status.isCompletedSchedule()
 										&& !status.isReadySchedule()
 										&& !status.isFutureSchedule()
 									) {
-										if(
-											status.getDate() != null
-											&& assignedTo != null
-											&& assignedTo.getAfter().getCount() > 0
-										) {
-											// assignedTo "after"
-											Calendar effectiveDate = UnmodifiableCalendar.unwrapClone(status.getDate());
-											assignedTo.getAfter().offset(effectiveDate);
-											if(now >= effectiveDate.getTimeInMillis()) {
+										if(priority == null) {
+											priority = TaskImpl.getPriorityForStatus(now, task, status);
+										}
+										if(priority != Priority.FUTURE) {
+											if(
+												status.getDate() != null
+												&& assignedTo != null
+												&& assignedTo.getAfter().getCount() > 0
+											) {
+												// assignedTo "after"
+												Calendar effectiveDate = UnmodifiableCalendar.unwrapClone(status.getDate());
+												assignedTo.getAfter().offset(effectiveDate);
+												if(now >= effectiveDate.getTimeInMillis()) {
+													return true;
+												}
+											} else {
+												// No time offset
 												return true;
 											}
-										} else {
-											// No time offset
-											return true;
 										}
 									}
 									// getFutureTasks logic
 									if(
-										priority == Priority.FUTURE
-										|| status.isFutureSchedule()
-									) {
 										// When assignedTo "after" is non-zero, hide from this user
-										if(
-											assignedTo == null
-											|| assignedTo.getAfter().getCount() == 0
-										) {
+										assignedTo == null
+										|| assignedTo.getAfter().getCount() == 0
+									) {
+										boolean future = status.isFutureSchedule();
+										if(!future) {
+											if(priority == null) {
+												priority = TaskImpl.getPriorityForStatus(now, task, status);
+											}
+											future = priority == Priority.FUTURE;
+										}
+										if(future) {
 											return true;
 										}
 									}
@@ -644,31 +649,27 @@ final public class TaskUtil {
 									|| assignedTo != null
 								) {
 									Task.StatusResult status = task.getStatus();
-									Priority priority;
-									if(status.getDate() != null) {
-										priority = task.getPriority(status.getDate(), now);
-									} else {
-										priority = task.getZeroDayPriority();
-									}
 									if(
-										priority != Priority.FUTURE
-										&& !status.isCompletedSchedule()
+										!status.isCompletedSchedule()
 										&& status.isReadySchedule()
 									) {
-										if(
-											status.getDate() != null
-											&& assignedTo != null
-											&& assignedTo.getAfter().getCount() > 0
-										) {
-											// assignedTo "after"
-											Calendar effectiveDate = UnmodifiableCalendar.unwrapClone(status.getDate());
-											assignedTo.getAfter().offset(effectiveDate);
-											if(now >= effectiveDate.getTimeInMillis()) {
+										Priority priority = TaskImpl.getPriorityForStatus(now, task, status);
+										if(priority != Priority.FUTURE) {
+											if(
+												status.getDate() != null
+												&& assignedTo != null
+												&& assignedTo.getAfter().getCount() > 0
+											) {
+												// assignedTo "after"
+												Calendar effectiveDate = UnmodifiableCalendar.unwrapClone(status.getDate());
+												assignedTo.getAfter().offset(effectiveDate);
+												if(now >= effectiveDate.getTimeInMillis()) {
+													readyTasks.add(task);
+												}
+											} else {
+												// No time offset
 												readyTasks.add(task);
 											}
-										} else {
-											// No time offset
-											readyTasks.add(task);
 										}
 									}
 								}
@@ -726,32 +727,28 @@ final public class TaskUtil {
 									|| assignedTo != null
 								) {
 									Task.StatusResult status = task.getStatus();
-									Priority priority;
-									if(status.getDate() != null) {
-										priority = task.getPriority(status.getDate(), now);
-									} else {
-										priority = task.getZeroDayPriority();
-									}
 									if(
-										priority != Priority.FUTURE
-										&& !status.isCompletedSchedule()
+										!status.isCompletedSchedule()
 										&& !status.isReadySchedule()
 										&& !status.isFutureSchedule()
 									) {
-										if(
-											status.getDate() != null
-											&& assignedTo != null
-											&& assignedTo.getAfter().getCount() > 0
-										) {
-											// assignedTo "after"
-											Calendar effectiveDate = UnmodifiableCalendar.unwrapClone(status.getDate());
-											assignedTo.getAfter().offset(effectiveDate);
-											if(now >= effectiveDate.getTimeInMillis()) {
+										Priority priority = TaskImpl.getPriorityForStatus(now, task, status);
+										if(priority != Priority.FUTURE) {
+											if(
+												status.getDate() != null
+												&& assignedTo != null
+												&& assignedTo.getAfter().getCount() > 0
+											) {
+												// assignedTo "after"
+												Calendar effectiveDate = UnmodifiableCalendar.unwrapClone(status.getDate());
+												assignedTo.getAfter().offset(effectiveDate);
+												if(now >= effectiveDate.getTimeInMillis()) {
+													blockedTasks.add(task);
+												}
+											} else {
+												// No time offset
 												blockedTasks.add(task);
 											}
-										} else {
-											// No time offset
-											blockedTasks.add(task);
 										}
 									}
 								}
@@ -805,27 +802,23 @@ final public class TaskUtil {
 								Task task = (Task)element;
 								TaskAssignment assignedTo = user == null ? null : task.getAssignedTo(user);
 								if(
-									user == null
-									|| assignedTo != null
+									(
+										user == null
+										|| assignedTo != null
+									) && (
+										// When assignedTo "after" is non-zero, hide from this user
+										assignedTo == null
+										|| assignedTo.getAfter().getCount() == 0
+									)
 								) {
 									Task.StatusResult status = task.getStatus();
-									Priority priority;
-									if(status.getDate() != null) {
-										priority = task.getPriority(status.getDate(), now);
-									} else {
-										priority = task.getZeroDayPriority();
+									boolean future = status.isFutureSchedule();
+									if(!future) {
+										Priority priority = TaskImpl.getPriorityForStatus(now, task, status);
+										future = priority == Priority.FUTURE;
 									}
-									if(
-										priority == Priority.FUTURE
-										|| status.isFutureSchedule()
-									) {
-										// When assignedTo "after" is non-zero, hide from this user
-										if(
-											assignedTo == null
-											|| assignedTo.getAfter().getCount() == 0
-										) {
-											futureTasks.add(task);
-										}
+									if(future) {
+										futureTasks.add(task);
 									}
 								}
 							}

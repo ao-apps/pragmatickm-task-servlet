@@ -251,6 +251,14 @@ final public class TaskImpl {
 		return new PageRef(pageRef.getBook(), xmlFilePath);
 	}
 
+	public static Priority getPriorityForStatus(long now, Task task, Task.StatusResult status) {
+		if(status.getDate() != null) {
+			return task.getPriority(status.getDate(), now);
+		} else {
+			return task.getZeroDayPriority();
+		}
+	}
+
 	private static void writeTasks(
 		ServletContext servletContext,
 		HttpServletRequest request,
@@ -268,12 +276,7 @@ final public class TaskImpl {
 				final Task task = tasks.get(i);
 				final Page taskPage = task.getPage();
 				final Task.StatusResult status = task.getStatus();
-				final Priority priority;
-				if(status.getDate() != null) {
-					priority = task.getPriority(status.getDate(), now);
-				} else {
-					priority = task.getZeroDayPriority();
-				}
+				final Priority priority = getPriorityForStatus(now, task, status);
 				out.write("<tr>");
 				if(i==0) {
 					out.write("<th rowspan=\"");
