@@ -170,6 +170,99 @@ final public class TaskUtil {
 		return Collections.unmodifiableList(doAfters);
 	}
 
+	/**
+	 * Finds all tasks that must be done after each of the provided tasks.
+	 * This requires a capture of the entire page tree
+	 * meta data to find any task that has a doBefore pointing to each task.
+	 *
+	 * @return  The map of doAfters, in the same iteration order as the provided
+	 *          tasks.  If no doAfters for a given task, will contain an empty list.
+	 */
+	public static Map<Task,List<Task>> getMultipleDoAfters(
+		ServletContext servletContext,
+		HttpServletRequest request,
+		HttpServletResponse response,
+		Collection<? extends Task> tasks
+	) throws ServletException, IOException {
+		int size = tasks.size();
+		if(size == 0) {
+			return Collections.emptyMap();
+		} else if(size == 1) {
+			Task task = tasks.iterator().next();
+			return Collections.singletonMap(
+				task,
+				getDoAfters(servletContext, request, response, task)
+			);
+		} else {
+			final Map<Task,List<Task>> results = new LinkedHashMap<Task,List<Task>>(size *4/3+1);
+			// Fill with empty lists, this sets the iteration order, too
+			{
+				List<Task> emptyList = Collections.emptyList();
+				for(Task task : tasks) results.put(task, emptyList);
+			}
+			CapturePage.traversePagesDepthFirst(
+				servletContext,
+				request,
+				response,
+				SemanticCMS.getInstance(servletContext).getRootBook().getContentRoot(),
+				CaptureLevel.META,
+				new CapturePage.PageHandler<Void>() {
+					@Override
+					public Void handlePage(Page page) throws ServletException, IOException {
+						try {
+							for(Element element : page.getElements()) {
+								if(element instanceof Task) {
+									Task pageTask = (Task)element;
+									for(TaskLookup doBeforeLookup : pageTask.getDoBefores()) {
+										Task doBefore = doBeforeLookup.getTask();
+										List<Task> doAfters = results.get(doBefore);
+										if(doAfters != null) {
+											int doAftersSize = doAfters.size();
+											if(doAftersSize == 0) {
+												results.put(doBefore, Collections.singletonList(pageTask));
+											} else {
+												if(doAftersSize == 1) {
+													Task first = doAfters.get(0);
+													doAfters = new ArrayList<Task>();
+													doAfters.add(first);
+													results.put(doBefore, doAfters);
+												}
+												doAfters.add(pageTask);
+											}
+										}
+									}
+								}
+							}
+						} catch(TaskException e) {
+							throw new ServletException(e);
+						}
+						return null;
+					}
+				},
+				new CapturePage.TraversalEdges() {
+					@Override
+					public Collection<PageRef> getEdges(Page page) {
+						return page.getChildPages();
+					}
+				},
+				new CapturePage.EdgeFilter() {
+					@Override
+					public boolean applyEdge(PageRef childPage) {
+						return childPage.getBook() != null;
+					}
+				},
+				null
+			);
+			// Wrap any with size of 2 or more with unmodifiable, 0 and 1 already are unmodifiable
+			for(Map.Entry<Task,List<Task>> entry : results.entrySet()) {
+				List<Task> doAfters = entry.getValue();
+				if(doAfters.size() > 1) entry.setValue(Collections.unmodifiableList(doAfters));
+			}
+			// Make entire map unmodifiable
+			return Collections.unmodifiableMap(results);
+		}
+	}
+
 	public static User getUser(
 		HttpServletRequest request,
 		HttpServletResponse response
