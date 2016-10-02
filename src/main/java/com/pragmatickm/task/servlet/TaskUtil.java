@@ -22,9 +22,9 @@
  */
 package com.pragmatickm.task.servlet;
 
-import com.aoindustries.lang.ObjectUtils;
 import com.aoindustries.util.ComparatorUtils;
 import com.aoindustries.util.StringUtility;
+import com.aoindustries.util.Tuple2;
 import com.aoindustries.util.UnmodifiableCalendar;
 import com.aoindustries.util.WrappedException;
 import com.pragmatickm.task.model.Priority;
@@ -473,36 +473,9 @@ final public class TaskUtil {
 		return pageUserCache;
 	}
 
-	static class PageUserKey {
-		private final Page page;
-		private final User user;
+	static class PageUserKey extends Tuple2<Page,User> {
 		PageUserKey(Page page, User user) {
-			this.page = page;
-			this.user = user;
-		}
-
-		@Override
-		public boolean equals(Object obj) {
-			if(this == obj) return true;
-			if(!(obj instanceof PageUserKey)) return false;
-			PageUserKey other = (PageUserKey)obj;
-			return
-				page.equals(other.page)
-				&& ObjectUtils.equals(user, other.user)
-			;
-		}
-
-		private int hash;
-
-		@Override
-		public int hashCode() {
-			int h = this.hash;
-			if(h == 0) {
-				h = page.hashCode();
-				if(user != null) h += user.hashCode() * 31;
-				this.hash = h;
-			}
-			return h;
+			super(page, user);
 		}
 	}
 
