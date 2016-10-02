@@ -22,6 +22,7 @@
  */
 package com.pragmatickm.task.servlet;
 
+import com.aoindustries.lang.ObjectUtils;
 import com.aoindustries.util.ComparatorUtils;
 import com.aoindustries.util.StringUtility;
 import com.aoindustries.util.UnmodifiableCalendar;
@@ -37,6 +38,8 @@ import com.pragmatickm.task.servlet.impl.TaskImpl;
 import com.semanticcms.core.model.Element;
 import com.semanticcms.core.model.Page;
 import com.semanticcms.core.model.PageRef;
+import com.semanticcms.core.servlet.Cache;
+import com.semanticcms.core.servlet.CacheFilter;
 import com.semanticcms.core.servlet.CaptureLevel;
 import com.semanticcms.core.servlet.CapturePage;
 import com.semanticcms.core.servlet.PageRefResolver;
@@ -452,6 +455,59 @@ final public class TaskUtil {
 		return Collections.unmodifiableList(sortedTasks);
 	}
 
+	private static <V> Map<PageUserKey,V> getPageUserCache(
+		final Cache cache,
+		String key
+	) {
+		@SuppressWarnings("unchecked")
+		Map<PageUserKey,V> pageUserCache = cache.getAttribute(
+			key,
+			Map.class,
+			new Cache.Callable<Map<PageUserKey,V>, RuntimeException>() {
+				@Override
+				public Map<PageUserKey, V> call() throws RuntimeException {
+					return cache.newMap();
+				}
+			}
+		);
+		return pageUserCache;
+	}
+
+	static class PageUserKey {
+		private final Page page;
+		private final User user;
+		PageUserKey(Page page, User user) {
+			this.page = page;
+			this.user = user;
+		}
+
+		@Override
+		public boolean equals(Object obj) {
+			if(this == obj) return true;
+			if(!(obj instanceof PageUserKey)) return false;
+			PageUserKey other = (PageUserKey)obj;
+			return
+				page.equals(other.page)
+				&& ObjectUtils.equals(user, other.user)
+			;
+		}
+
+		private int hash;
+
+		@Override
+		public int hashCode() {
+			int h = this.hash;
+			if(h == 0) {
+				h = page.hashCode();
+				if(user != null) h += user.hashCode() * 31;
+				this.hash = h;
+			}
+			return h;
+		}
+	}
+
+	private static final String ALL_TASKS_CACHE_KEY = TaskUtil.class.getName() + ".getAllTasks";
+
 	public static List<Task> getAllTasks(
 		ServletContext servletContext,
 		HttpServletRequest request,
@@ -459,167 +515,184 @@ final public class TaskUtil {
 		Page rootPage,
 		final User user
 	) throws IOException, ServletException {
-		final List<Task> allTasks = new ArrayList<Task>();
-		CapturePage.traversePagesDepthFirst(
-			servletContext,
-			request,
-			response,
-			rootPage,
-			CaptureLevel.META,
-			new CapturePage.PageHandler<Void>() {
-				@Override
-				public Void handlePage(Page page) throws ServletException, IOException {
-					for(Element element : page.getElements()) {
-						if(element instanceof Task) {
-							Task task = (Task)element;
-							if(
-								user == null
-								|| task.getAssignedTo(user) != null
-							) allTasks.add(task);
+		PageUserKey cacheKey = new PageUserKey(rootPage, user);
+		Map<PageUserKey,List<Task>> cache = getPageUserCache(CacheFilter.getCache(request), ALL_TASKS_CACHE_KEY);
+		List<Task> results = cache.get(cacheKey);
+		if(results == null) {
+			final List<Task> allTasks = new ArrayList<Task>();
+			CapturePage.traversePagesDepthFirst(
+				servletContext,
+				request,
+				response,
+				rootPage,
+				CaptureLevel.META,
+				new CapturePage.PageHandler<Void>() {
+					@Override
+					public Void handlePage(Page page) throws ServletException, IOException {
+						for(Element element : page.getElements()) {
+							if(element instanceof Task) {
+								Task task = (Task)element;
+								if(
+									user == null
+									|| task.getAssignedTo(user) != null
+								) allTasks.add(task);
+							}
 						}
+						return null;
 					}
-					return null;
-				}
-			},
-			new CapturePage.TraversalEdges() {
-				@Override
-				public Collection<PageRef> getEdges(Page page) {
-					return page.getChildPages();
-				}
-			},
-			new CapturePage.EdgeFilter() {
-				@Override
-				public boolean applyEdge(PageRef childPage) {
-					// Child not in missing book
-					return childPage.getBook() != null;
-				}
-			},
-			null
-		);
-		return Collections.unmodifiableList(allTasks);
+				},
+				new CapturePage.TraversalEdges() {
+					@Override
+					public Collection<PageRef> getEdges(Page page) {
+						return page.getChildPages();
+					}
+				},
+				new CapturePage.EdgeFilter() {
+					@Override
+					public boolean applyEdge(PageRef childPage) {
+						// Child not in missing book
+						return childPage.getBook() != null;
+					}
+				},
+				null
+			);
+			results = Collections.unmodifiableList(allTasks);
+			cache.put(cacheKey, results);
+		}
+		return results;
 	}
+
+	private static final String HAS_ASSIGNED_TASK_CACHE_KEY = TaskUtil.class.getName() + ".hasAssignedTask";
 
 	public static boolean hasAssignedTask(
 		ServletContext servletContext,
 		HttpServletRequest request,
 		HttpServletResponse response,
 		Page page,
-		final User user,
-		final boolean recursive
+		final User user
 	) throws ServletException, IOException {
-		final long now = System.currentTimeMillis();
-		return CapturePage.traversePagesAnyOrder(
-			servletContext,
-			request,
-			response,
-			page,
-			CaptureLevel.META,
-			new CapturePage.PageHandler<Boolean>() {
-				@Override
-				public Boolean handlePage(Page page) throws ServletException, IOException {
-					try {
-						for(Element element : page.getElements()) {
-							if(element instanceof Task) {
-								Task task = (Task)element;
-								TaskAssignment assignedTo = user == null ? null : task.getAssignedTo(user);
-								if(
-									user == null
-									|| assignedTo != null
-								) {
-									Task.StatusResult status = task.getStatus();
-									Priority priority = null;
-									// getReadyTasks logic
+		PageUserKey cacheKey = new PageUserKey(page, user);
+		Map<PageUserKey,Boolean> cache = getPageUserCache(CacheFilter.getCache(request), HAS_ASSIGNED_TASK_CACHE_KEY);
+		Boolean result = cache.get(cacheKey);
+		if(result == null) {
+			final long now = System.currentTimeMillis();
+			result = CapturePage.traversePagesAnyOrder(
+				servletContext,
+				request,
+				response,
+				page,
+				CaptureLevel.META,
+				new CapturePage.PageHandler<Boolean>() {
+					@Override
+					public Boolean handlePage(Page page) throws ServletException, IOException {
+						try {
+							for(Element element : page.getElements()) {
+								if(element instanceof Task) {
+									Task task = (Task)element;
+									TaskAssignment assignedTo = user == null ? null : task.getAssignedTo(user);
 									if(
-										!status.isCompletedSchedule()
-										&& status.isReadySchedule()
+										user == null
+										|| assignedTo != null
 									) {
-										priority = TaskImpl.getPriorityForStatus(now, task, status);
-										if(priority != Priority.FUTURE) {
-											if(
-												status.getDate() != null
-												&& assignedTo != null
-												&& assignedTo.getAfter().getCount() > 0
-											) {
-												// assignedTo "after"
-												Calendar effectiveDate = UnmodifiableCalendar.unwrapClone(status.getDate());
-												assignedTo.getAfter().offset(effectiveDate);
-												if(now >= effectiveDate.getTimeInMillis()) {
-													return true;
-												}
-											} else {
-												// No time offset
-												return true;
-											}
-										}
-									}
-									// getBlockedTasks logic
-									if(
-										!status.isCompletedSchedule()
-										&& !status.isReadySchedule()
-										&& !status.isFutureSchedule()
-									) {
-										if(priority == null) {
+										Task.StatusResult status = task.getStatus();
+										Priority priority = null;
+										// getReadyTasks logic
+										if(
+											!status.isCompletedSchedule()
+											&& status.isReadySchedule()
+										) {
 											priority = TaskImpl.getPriorityForStatus(now, task, status);
-										}
-										if(priority != Priority.FUTURE) {
-											if(
-												status.getDate() != null
-												&& assignedTo != null
-												&& assignedTo.getAfter().getCount() > 0
-											) {
-												// assignedTo "after"
-												Calendar effectiveDate = UnmodifiableCalendar.unwrapClone(status.getDate());
-												assignedTo.getAfter().offset(effectiveDate);
-												if(now >= effectiveDate.getTimeInMillis()) {
+											if(priority != Priority.FUTURE) {
+												if(
+													status.getDate() != null
+													&& assignedTo != null
+													&& assignedTo.getAfter().getCount() > 0
+												) {
+													// assignedTo "after"
+													Calendar effectiveDate = UnmodifiableCalendar.unwrapClone(status.getDate());
+													assignedTo.getAfter().offset(effectiveDate);
+													if(now >= effectiveDate.getTimeInMillis()) {
+														return true;
+													}
+												} else {
+													// No time offset
 													return true;
 												}
-											} else {
-												// No time offset
-												return true;
 											}
 										}
-									}
-									// getFutureTasks logic
-									if(
-										// When assignedTo "after" is non-zero, hide from this user
-										assignedTo == null
-										|| assignedTo.getAfter().getCount() == 0
-									) {
-										boolean future = status.isFutureSchedule();
-										if(!future) {
+										// getBlockedTasks logic
+										if(
+											!status.isCompletedSchedule()
+											&& !status.isReadySchedule()
+											&& !status.isFutureSchedule()
+										) {
 											if(priority == null) {
 												priority = TaskImpl.getPriorityForStatus(now, task, status);
 											}
-											future = priority == Priority.FUTURE;
+											if(priority != Priority.FUTURE) {
+												if(
+													status.getDate() != null
+													&& assignedTo != null
+													&& assignedTo.getAfter().getCount() > 0
+												) {
+													// assignedTo "after"
+													Calendar effectiveDate = UnmodifiableCalendar.unwrapClone(status.getDate());
+													assignedTo.getAfter().offset(effectiveDate);
+													if(now >= effectiveDate.getTimeInMillis()) {
+														return true;
+													}
+												} else {
+													// No time offset
+													return true;
+												}
+											}
 										}
-										if(future) {
-											return true;
+										// getFutureTasks logic
+										if(
+											// When assignedTo "after" is non-zero, hide from this user
+											assignedTo == null
+											|| assignedTo.getAfter().getCount() == 0
+										) {
+											boolean future = status.isFutureSchedule();
+											if(!future) {
+												if(priority == null) {
+													priority = TaskImpl.getPriorityForStatus(now, task, status);
+												}
+												future = priority == Priority.FUTURE;
+											}
+											if(future) {
+												return true;
+											}
 										}
 									}
 								}
 							}
+							return null;
+						} catch(TaskException e) {
+							throw new ServletException(e);
 						}
-						return null;
-					} catch(TaskException e) {
-						throw new ServletException(e);
+					}
+				},
+				new CapturePage.TraversalEdges() {
+					@Override
+					public Collection<PageRef> getEdges(Page page) {
+						return page.getChildPages();
+					}
+				},
+				new CapturePage.EdgeFilter() {
+					@Override
+					public boolean applyEdge(PageRef childPage) {
+						// Child not in missing book
+						return childPage.getBook() != null;
 					}
 				}
-			},
-			new CapturePage.TraversalEdges() {
-				@Override
-				public Collection<PageRef> getEdges(Page page) {
-					return recursive ? page.getChildPages() : null;
-				}
-			},
-			new CapturePage.EdgeFilter() {
-				@Override
-				public boolean applyEdge(PageRef childPage) {
-					// Child not in missing book
-					return childPage.getBook() != null;
-				}
-			}
-		) != null;
+			) != null;
+			cache.put(cacheKey, result);
+		}
+		return result;
 	}
+
+	private static final String GET_READY_TASKS_CACHE_KEY = TaskUtil.class.getName() + ".getReadyTasks";
 
 	public static List<Task> getReadyTasks(
 		ServletContext servletContext,
@@ -628,76 +701,85 @@ final public class TaskUtil {
 		Page rootPage,
 		final User user
 	) throws IOException, ServletException {
-		final long now = System.currentTimeMillis();
-		final List<Task> readyTasks = new ArrayList<Task>();
-		CapturePage.traversePagesDepthFirst(
-			servletContext,
-			request,
-			response,
-			rootPage,
-			CaptureLevel.META,
-			new CapturePage.PageHandler<Void>() {
-				@Override
-				public Void handlePage(Page page) throws ServletException, IOException {
-					try {
-						for(Element element : page.getElements()) {
-							if(element instanceof Task) {
-								Task task = (Task)element;
-								TaskAssignment assignedTo = user == null ? null : task.getAssignedTo(user);
-								if(
-									user == null
-									|| assignedTo != null
-								) {
-									Task.StatusResult status = task.getStatus();
+		PageUserKey cacheKey = new PageUserKey(rootPage, user);
+		Map<PageUserKey,List<Task>> cache = getPageUserCache(CacheFilter.getCache(request), GET_READY_TASKS_CACHE_KEY);
+		List<Task> results = cache.get(cacheKey);
+		if(results == null) {
+			final long now = System.currentTimeMillis();
+			final List<Task> readyTasks = new ArrayList<Task>();
+			CapturePage.traversePagesDepthFirst(
+				servletContext,
+				request,
+				response,
+				rootPage,
+				CaptureLevel.META,
+				new CapturePage.PageHandler<Void>() {
+					@Override
+					public Void handlePage(Page page) throws ServletException, IOException {
+						try {
+							for(Element element : page.getElements()) {
+								if(element instanceof Task) {
+									Task task = (Task)element;
+									TaskAssignment assignedTo = user == null ? null : task.getAssignedTo(user);
 									if(
-										!status.isCompletedSchedule()
-										&& status.isReadySchedule()
+										user == null
+										|| assignedTo != null
 									) {
-										Priority priority = TaskImpl.getPriorityForStatus(now, task, status);
-										if(priority != Priority.FUTURE) {
-											if(
-												status.getDate() != null
-												&& assignedTo != null
-												&& assignedTo.getAfter().getCount() > 0
-											) {
-												// assignedTo "after"
-												Calendar effectiveDate = UnmodifiableCalendar.unwrapClone(status.getDate());
-												assignedTo.getAfter().offset(effectiveDate);
-												if(now >= effectiveDate.getTimeInMillis()) {
+										Task.StatusResult status = task.getStatus();
+										if(
+											!status.isCompletedSchedule()
+											&& status.isReadySchedule()
+										) {
+											Priority priority = TaskImpl.getPriorityForStatus(now, task, status);
+											if(priority != Priority.FUTURE) {
+												if(
+													status.getDate() != null
+													&& assignedTo != null
+													&& assignedTo.getAfter().getCount() > 0
+												) {
+													// assignedTo "after"
+													Calendar effectiveDate = UnmodifiableCalendar.unwrapClone(status.getDate());
+													assignedTo.getAfter().offset(effectiveDate);
+													if(now >= effectiveDate.getTimeInMillis()) {
+														readyTasks.add(task);
+													}
+												} else {
+													// No time offset
 													readyTasks.add(task);
 												}
-											} else {
-												// No time offset
-												readyTasks.add(task);
 											}
 										}
 									}
 								}
 							}
+							return null;
+						} catch(TaskException e) {
+							throw new ServletException(e);
 						}
-						return null;
-					} catch(TaskException e) {
-						throw new ServletException(e);
 					}
-				}
-			},
-			new CapturePage.TraversalEdges() {
-				@Override
-				public Collection<PageRef> getEdges(Page page) {
-					return page.getChildPages();
-				}
-			},
-			new CapturePage.EdgeFilter() {
-				@Override
-				public boolean applyEdge(PageRef childPage) {
-					// Child not in missing book
-					return childPage.getBook() != null;
-				}
-			},
-			null
-		);
-		return Collections.unmodifiableList(readyTasks);
+				},
+				new CapturePage.TraversalEdges() {
+					@Override
+					public Collection<PageRef> getEdges(Page page) {
+						return page.getChildPages();
+					}
+				},
+				new CapturePage.EdgeFilter() {
+					@Override
+					public boolean applyEdge(PageRef childPage) {
+						// Child not in missing book
+						return childPage.getBook() != null;
+					}
+				},
+				null
+			);
+			results = Collections.unmodifiableList(readyTasks);
+			cache.put(cacheKey, results);
+		}
+		return results;
 	}
+
+	private static final String GET_BLOCKED_TASKS_CACHE_KEY = TaskUtil.class.getName() + ".getBlockedTasks";
 
 	public static List<Task> getBlockedTasks(
 		ServletContext servletContext,
@@ -706,77 +788,86 @@ final public class TaskUtil {
 		Page rootPage,
 		final User user
 	) throws IOException, ServletException {
-		final long now = System.currentTimeMillis();
-		final List<Task> blockedTasks = new ArrayList<Task>();
-		CapturePage.traversePagesDepthFirst(
-			servletContext,
-			request,
-			response,
-			rootPage,
-			CaptureLevel.META,
-			new CapturePage.PageHandler<Void>() {
-				@Override
-				public Void handlePage(Page page) throws ServletException, IOException {
-					try {
-						for(Element element : page.getElements()) {
-							if(element instanceof Task) {
-								Task task = (Task)element;
-								TaskAssignment assignedTo = user == null ? null : task.getAssignedTo(user);
-								if(
-									user == null
-									|| assignedTo != null
-								) {
-									Task.StatusResult status = task.getStatus();
+		PageUserKey cacheKey = new PageUserKey(rootPage, user);
+		Map<PageUserKey,List<Task>> cache = getPageUserCache(CacheFilter.getCache(request), GET_BLOCKED_TASKS_CACHE_KEY);
+		List<Task> results = cache.get(cacheKey);
+		if(results == null) {
+			final long now = System.currentTimeMillis();
+			final List<Task> blockedTasks = new ArrayList<Task>();
+			CapturePage.traversePagesDepthFirst(
+				servletContext,
+				request,
+				response,
+				rootPage,
+				CaptureLevel.META,
+				new CapturePage.PageHandler<Void>() {
+					@Override
+					public Void handlePage(Page page) throws ServletException, IOException {
+						try {
+							for(Element element : page.getElements()) {
+								if(element instanceof Task) {
+									Task task = (Task)element;
+									TaskAssignment assignedTo = user == null ? null : task.getAssignedTo(user);
 									if(
-										!status.isCompletedSchedule()
-										&& !status.isReadySchedule()
-										&& !status.isFutureSchedule()
+										user == null
+										|| assignedTo != null
 									) {
-										Priority priority = TaskImpl.getPriorityForStatus(now, task, status);
-										if(priority != Priority.FUTURE) {
-											if(
-												status.getDate() != null
-												&& assignedTo != null
-												&& assignedTo.getAfter().getCount() > 0
-											) {
-												// assignedTo "after"
-												Calendar effectiveDate = UnmodifiableCalendar.unwrapClone(status.getDate());
-												assignedTo.getAfter().offset(effectiveDate);
-												if(now >= effectiveDate.getTimeInMillis()) {
+										Task.StatusResult status = task.getStatus();
+										if(
+											!status.isCompletedSchedule()
+											&& !status.isReadySchedule()
+											&& !status.isFutureSchedule()
+										) {
+											Priority priority = TaskImpl.getPriorityForStatus(now, task, status);
+											if(priority != Priority.FUTURE) {
+												if(
+													status.getDate() != null
+													&& assignedTo != null
+													&& assignedTo.getAfter().getCount() > 0
+												) {
+													// assignedTo "after"
+													Calendar effectiveDate = UnmodifiableCalendar.unwrapClone(status.getDate());
+													assignedTo.getAfter().offset(effectiveDate);
+													if(now >= effectiveDate.getTimeInMillis()) {
+														blockedTasks.add(task);
+													}
+												} else {
+													// No time offset
 													blockedTasks.add(task);
 												}
-											} else {
-												// No time offset
-												blockedTasks.add(task);
 											}
 										}
 									}
 								}
 							}
+							return null;
+						} catch(TaskException e) {
+							throw new ServletException(e);
 						}
-						return null;
-					} catch(TaskException e) {
-						throw new ServletException(e);
 					}
-				}
-			},
-			new CapturePage.TraversalEdges() {
-				@Override
-				public Collection<PageRef> getEdges(Page page) {
-					return page.getChildPages();
-				}
-			},
-			new CapturePage.EdgeFilter() {
-				@Override
-				public boolean applyEdge(PageRef childPage) {
-					// Child not in missing book
-					return childPage.getBook() != null;
-				}
-			},
-			null
-		);
-		return Collections.unmodifiableList(blockedTasks);
+				},
+				new CapturePage.TraversalEdges() {
+					@Override
+					public Collection<PageRef> getEdges(Page page) {
+						return page.getChildPages();
+					}
+				},
+				new CapturePage.EdgeFilter() {
+					@Override
+					public boolean applyEdge(PageRef childPage) {
+						// Child not in missing book
+						return childPage.getBook() != null;
+					}
+				},
+				null
+			);
+			results = Collections.unmodifiableList(blockedTasks);
+			cache.put(cacheKey, results);
+		}
+		return results;
 	}
+
+	private static final String FUTURE_TASKS_CACHE_KEY = TaskUtil.class.getName() + ".getFutureTasks";
 
 	public static List<Task> getFutureTasks(
 		ServletContext servletContext,
@@ -785,66 +876,73 @@ final public class TaskUtil {
 		Page rootPage,
 		final User user
 	) throws IOException, ServletException {
-		final long now = System.currentTimeMillis();
-		final List<Task> futureTasks = new ArrayList<Task>();
-		CapturePage.traversePagesDepthFirst(
-			servletContext,
-			request,
-			response,
-			rootPage,
-			CaptureLevel.META,
-			new CapturePage.PageHandler<Void>() {
-				@Override
-				public Void handlePage(Page page) throws ServletException, IOException {
-					try {
-						for(Element element : page.getElements()) {
-							if(element instanceof Task) {
-								Task task = (Task)element;
-								TaskAssignment assignedTo = user == null ? null : task.getAssignedTo(user);
-								if(
-									(
-										user == null
-										|| assignedTo != null
-									) && (
-										// When assignedTo "after" is non-zero, hide from this user
-										assignedTo == null
-										|| assignedTo.getAfter().getCount() == 0
-									)
-								) {
-									Task.StatusResult status = task.getStatus();
-									boolean future = status.isFutureSchedule();
-									if(!future) {
-										Priority priority = TaskImpl.getPriorityForStatus(now, task, status);
-										future = priority == Priority.FUTURE;
-									}
-									if(future) {
-										futureTasks.add(task);
+		PageUserKey cacheKey = new PageUserKey(rootPage, user);
+		Map<PageUserKey,List<Task>> cache = getPageUserCache(CacheFilter.getCache(request), FUTURE_TASKS_CACHE_KEY);
+		List<Task> results = cache.get(cacheKey);
+		if(results == null) {
+			final long now = System.currentTimeMillis();
+			final List<Task> futureTasks = new ArrayList<Task>();
+			CapturePage.traversePagesDepthFirst(
+				servletContext,
+				request,
+				response,
+				rootPage,
+				CaptureLevel.META,
+				new CapturePage.PageHandler<Void>() {
+					@Override
+					public Void handlePage(Page page) throws ServletException, IOException {
+						try {
+							for(Element element : page.getElements()) {
+								if(element instanceof Task) {
+									Task task = (Task)element;
+									TaskAssignment assignedTo = user == null ? null : task.getAssignedTo(user);
+									if(
+										(
+											user == null
+											|| assignedTo != null
+										) && (
+											// When assignedTo "after" is non-zero, hide from this user
+											assignedTo == null
+											|| assignedTo.getAfter().getCount() == 0
+										)
+									) {
+										Task.StatusResult status = task.getStatus();
+										boolean future = status.isFutureSchedule();
+										if(!future) {
+											Priority priority = TaskImpl.getPriorityForStatus(now, task, status);
+											future = priority == Priority.FUTURE;
+										}
+										if(future) {
+											futureTasks.add(task);
+										}
 									}
 								}
 							}
+							return null;
+						} catch(TaskException e) {
+							throw new ServletException(e);
 						}
-						return null;
-					} catch(TaskException e) {
-						throw new ServletException(e);
 					}
-				}
-			},
-			new CapturePage.TraversalEdges() {
-				@Override
-				public Collection<PageRef> getEdges(Page page) {
-					return page.getChildPages();
-				}
-			},
-			new CapturePage.EdgeFilter() {
-				@Override
-				public boolean applyEdge(PageRef childPage) {
-					// Child not in missing book
-					return childPage.getBook() != null;
-				}
-			},
-			null
-		);
-		return Collections.unmodifiableList(futureTasks);
+				},
+				new CapturePage.TraversalEdges() {
+					@Override
+					public Collection<PageRef> getEdges(Page page) {
+						return page.getChildPages();
+					}
+				},
+				new CapturePage.EdgeFilter() {
+					@Override
+					public boolean applyEdge(PageRef childPage) {
+						// Child not in missing book
+						return childPage.getBook() != null;
+					}
+				},
+				null
+			);
+			results = Collections.unmodifiableList(futureTasks);
+			cache.put(cacheKey, results);
+		}
+		return results;
 	}
 
 	/**
