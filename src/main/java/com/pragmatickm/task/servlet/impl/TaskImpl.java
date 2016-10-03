@@ -35,14 +35,19 @@ import com.aoindustries.util.schedule.Recurring;
 import com.pragmatickm.task.model.Priority;
 import com.pragmatickm.task.model.Task;
 import com.pragmatickm.task.model.TaskException;
-import com.pragmatickm.task.model.TaskLookup;
 import com.pragmatickm.task.model.TaskPriority;
+import com.pragmatickm.task.servlet.StatusResult;
 import com.pragmatickm.task.servlet.TaskUtil;
+import com.semanticcms.core.model.Element;
 import com.semanticcms.core.model.ElementContext;
+import com.semanticcms.core.model.ElementRef;
 import com.semanticcms.core.model.NodeBodyWriter;
 import com.semanticcms.core.model.Page;
 import com.semanticcms.core.model.PageRef;
+import com.semanticcms.core.servlet.Cache;
+import com.semanticcms.core.servlet.CacheFilter;
 import com.semanticcms.core.servlet.CaptureLevel;
+import com.semanticcms.core.servlet.CapturePage;
 import com.semanticcms.core.servlet.CurrentPage;
 import com.semanticcms.core.servlet.PageIndex;
 import com.semanticcms.core.servlet.SemanticCMS;
@@ -50,7 +55,10 @@ import java.io.IOException;
 import java.io.Writer;
 import java.util.ArrayList;
 import java.util.Calendar;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import javax.el.ELContext;
 import javax.el.ValueExpression;
 import javax.servlet.ServletContext;
@@ -136,6 +144,46 @@ final public class TaskImpl {
 		}
 
 		if(captureLevel == CaptureLevel.BODY) {
+			Cache cache = CacheFilter.getCache(request);
+			// Capture the doBefores
+			List<Task> doBefores;
+			{
+				// TODO: Concurrent getDoBefores?
+				Set<ElementRef> doBeforeRefs = task.getDoBefores();
+				int size = doBeforeRefs.size();
+				doBefores = new ArrayList<Task>(size);
+				// TODO: Concurrent capture here?
+				for(ElementRef doBefore : doBeforeRefs) {
+					Element elem = CapturePage.capturePage(
+						servletContext,
+						request,
+						response,
+						doBefore.getPageRef(),
+						CaptureLevel.META
+					).getElementsById().get(doBefore.getId());
+					if(elem == null) throw new TaskException("Element not found: " + doBefore);
+					if(!(elem instanceof Task)) throw new TaskException("Element is not a Task: " + elem.getClass().getName());
+					if(elem.getPage().getGeneratedIds().contains(elem.getId())) throw new TaskException("Not allowed to reference task by generated id, set an explicit id on the task: " + elem);
+					doBefores.add((Task)elem);
+				}
+			}
+			// Find the doAfters
+			List<Task> doAfters = TaskUtil.getDoAfters(servletContext, request, response, task);
+			// Lookup all the statuses at once
+			Map<Task,StatusResult> statuses;
+			{
+				Set<Task> allTasks = new HashSet<Task>(
+					(
+						doBefores.size()
+						+ 1 // this task
+						+ doAfters.size()
+					) *4/3+1
+				);
+				allTasks.addAll(doBefores);
+				allTasks.add(task);
+				allTasks.addAll(doAfters);
+				statuses = TaskUtil.getMultipleStatuses(servletContext, request, response, allTasks, cache);
+			}
 			// Write the task itself to this page
 			final PageIndex pageIndex = PageIndex.getCurrentPageIndex(request);
 			out.write("<table id=\"");
@@ -157,11 +205,10 @@ final public class TaskImpl {
 			encodeTextInXhtml(task.getLabel(), out);
 			out.write("</div></th></tr></thead>\n"
 					+ "<tbody>\n");
-			List<TaskLookup> doBeforeLookups = task.getDoBefores();
 			final long now = System.currentTimeMillis();
-			writeTaskLookups(servletContext, request, response, out, currentPage, now, doBeforeLookups, "Do Before:");
+			writeTasks(servletContext, request, response, out, cache, currentPage, now, doBefores, statuses, "Do Before:");
 			out.write("<tr><th>Status:</th><td class=\"");
-			Task.StatusResult status = task.getStatus();
+			StatusResult status = statuses.get(task);
 			encodeTextInXhtmlAttribute(status.getCssClass().name(), out);
 			out.write("\" colspan=\"3\">");
 			encodeTextInXhtml(status.getDescription(), out);
@@ -197,8 +244,7 @@ final public class TaskImpl {
 			writeRow("Assigned To:", task.getAssignedTo(), out);
 			writeRow("Pay:", task.getPay(), out);
 			writeRow("Cost:", task.getCost(), out);
-			List<Task> doAfters = TaskUtil.getDoAfters(servletContext, request, response, task);
-			writeTasks(servletContext, request, response, out, currentPage, now, doAfters, "Do After:");
+			writeTasks(servletContext, request, response, out, cache, currentPage, now, doAfters, statuses, "Do After:");
 		}
 	}
 
@@ -251,7 +297,7 @@ final public class TaskImpl {
 		return new PageRef(pageRef.getBook(), xmlFilePath);
 	}
 
-	public static Priority getPriorityForStatus(long now, Task task, Task.StatusResult status) {
+	public static Priority getPriorityForStatus(long now, Task task, StatusResult status) {
 		if(status.getDate() != null) {
 			return task.getPriority(status.getDate(), now);
 		} else {
@@ -264,19 +310,21 @@ final public class TaskImpl {
 		HttpServletRequest request,
 		HttpServletResponse response,
 		Writer out,
+		Cache cache,
 		Page currentPage,
 		long now,
 		List<? extends Task> tasks,
+		Map<Task,StatusResult> statuses,
 		String label
-	) throws IOException, TaskException {
+	) throws ServletException, IOException, TaskException {
 		int size = tasks.size();
 		if(size>0) {
 			SemanticCMS semanticCMS = SemanticCMS.getInstance(servletContext);
 			for(int i=0; i<size; i++) {
-				final Task task = tasks.get(i);
-				final Page taskPage = task.getPage();
-				final Task.StatusResult status = task.getStatus();
-				final Priority priority = getPriorityForStatus(now, task, status);
+				Task task = tasks.get(i);
+				Page taskPage = task.getPage();
+				StatusResult status = statuses.get(task);
+				Priority priority = getPriorityForStatus(now, task, status);
 				out.write("<tr>");
 				if(i==0) {
 					out.write("<th rowspan=\"");
@@ -338,33 +386,6 @@ final public class TaskImpl {
 				}
 				out.write("</a></td></tr>\n");
 			}
-		}
-	}
-
-	private static void writeTaskLookups(
-		ServletContext servletContext,
-		HttpServletRequest request,
-		HttpServletResponse response,
-		Writer out,
-		Page currentPage,
-		long now,
-		List<TaskLookup> taskLookups,
-		String label
-	) throws TaskException, IOException {
-		int size = taskLookups.size();
-		if(size>0) {
-			List<Task> tasks = new ArrayList<Task>(size);
-			for(TaskLookup taskLookup : taskLookups) tasks.add(taskLookup.getTask());
-			writeTasks(
-				servletContext,
-				request,
-				response,
-				out,
-				currentPage,
-				now,
-				tasks,
-				label
-			);
 		}
 	}
 

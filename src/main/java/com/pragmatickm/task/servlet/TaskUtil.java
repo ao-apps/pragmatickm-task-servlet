@@ -22,28 +22,37 @@
  */
 package com.pragmatickm.task.servlet;
 
+import com.aoindustries.io.TempFileList;
+import com.aoindustries.servlet.filter.TempFileContext;
+import com.aoindustries.util.CalendarUtils;
 import com.aoindustries.util.ComparatorUtils;
 import com.aoindustries.util.StringUtility;
 import com.aoindustries.util.Tuple2;
 import com.aoindustries.util.UnmodifiableCalendar;
 import com.aoindustries.util.WrappedException;
+import com.aoindustries.util.schedule.Recurring;
 import com.pragmatickm.task.model.Priority;
 import com.pragmatickm.task.model.Task;
 import com.pragmatickm.task.model.TaskAssignment;
 import com.pragmatickm.task.model.TaskException;
 import com.pragmatickm.task.model.TaskLog;
-import com.pragmatickm.task.model.TaskLookup;
 import com.pragmatickm.task.model.User;
 import com.pragmatickm.task.servlet.impl.TaskImpl;
 import com.semanticcms.core.model.Element;
+import com.semanticcms.core.model.ElementRef;
 import com.semanticcms.core.model.Page;
 import com.semanticcms.core.model.PageRef;
 import com.semanticcms.core.servlet.Cache;
 import com.semanticcms.core.servlet.CacheFilter;
 import com.semanticcms.core.servlet.CaptureLevel;
 import com.semanticcms.core.servlet.CapturePage;
+import com.semanticcms.core.servlet.CountConcurrencyFilter;
 import com.semanticcms.core.servlet.PageRefResolver;
 import com.semanticcms.core.servlet.SemanticCMS;
+import com.semanticcms.core.servlet.util.HttpServletSubRequest;
+import com.semanticcms.core.servlet.util.HttpServletSubResponse;
+import com.semanticcms.core.servlet.util.UnmodifiableCopyHttpServletRequest;
+import com.semanticcms.core.servlet.util.UnmodifiableCopyHttpServletResponse;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Calendar;
@@ -52,10 +61,14 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.EnumSet;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.SortedSet;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutionException;
 import javax.servlet.ServletContext;
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
@@ -112,6 +125,567 @@ final public class TaskUtil {
 		return null;
 	}
 
+	private static final String GET_STATUS_CACHE_KEY = TaskUtil.class.getName() + ".getStatus";
+
+	@SuppressWarnings("unchecked")
+	private static Map<Task,StatusResult> getStatusCache(final Cache cache) {
+		return cache.getAttribute(
+			GET_STATUS_CACHE_KEY,
+			Map.class,
+			new Cache.Callable<Map<Task,StatusResult>, RuntimeException>() {
+				@Override
+				public Map<Task, StatusResult> call() throws RuntimeException {
+					return cache.newMap();
+				}
+			}
+		);
+	}
+
+	/**
+	 * <p>
+	 * Gets a human-readable description of the task status as well as an associated class.
+	 * The status of a task, without any specific qualifying date, is:
+	 * </p>
+	 * <p>
+	 * For non-scheduled tasks (with no "on" date and no "recurring"), the status is:
+	 * <ol>
+	 *   <li>The status of the most recent log entry with no "scheduledOn" value</li>
+	 *   <li>"New"</li>
+	 * </ol>
+	 * </p>
+	 * <p>
+	 * For a scheduled, non-recurring task, the status is:
+	 * <ol>
+	 *   <li>If the status of the most recent log entry with a "scheduledOn" value equaling the task "on" date is of a "completedSchedule" type - use the status.</li>
+	 *   <li>If in the past, "Late YYYY-MM-DD"</li>
+	 *   <li>If today, "Due Today"</li>
+	 *   <li>If there is a status of the most recent log entry with a "scheduledOn" value equaling the task "on" date - use the status.</li>
+	 *   <li>Is in the future, "Waiting until YYYY-MM-DD"</li>
+	 * </ol>
+	 * </p>
+	 * <p>
+	 * For a recurring task, the status is:
+	 * </p>
+	 * <ol>
+	 *   <li>Find the first incomplete scheduledOn date (based on most recent log entries per scheduled date, in time order</li>
+	 *   <li>If the first incomplete is in the past, "Late YYYY-MM-DD"</li>
+	 *   <li>If the first incomplete is today, "Due Today"</li>
+	 *   <li>If the first incomplete is in the future, "Waiting until YYYY-MM-DD"</li>
+	 * </ol>
+	 * <p>
+	 * Status only available once frozen.
+	 * </p>
+	 */
+	public static StatusResult getStatus(
+		ServletContext servletContext,
+		HttpServletRequest request,
+		HttpServletResponse response,
+		Task task
+	) throws TaskException, ServletException, IOException {
+		return getStatus(
+			servletContext,
+			request,
+			response,
+			task,
+			CacheFilter.getCache(request)
+		);
+	}
+
+	public static StatusResult getStatus(
+		ServletContext servletContext,
+		HttpServletRequest request,
+		HttpServletResponse response,
+		Task task,
+		Cache cache
+	) throws TaskException, ServletException, IOException {
+		return getStatus(
+			servletContext,
+			request,
+			response,
+			task,
+			cache,
+			getStatusCache(cache)
+		);
+	}
+
+	private static StatusResult getStatus(
+		ServletContext servletContext,
+		HttpServletRequest request,
+		HttpServletResponse response,
+		Task task,
+		Cache cache,
+		Map<Task,StatusResult> statusCache
+	) throws TaskException, ServletException, IOException {
+		StatusResult sr = statusCache.get(task);
+		if(sr == null) {
+			// TODO: Concurrency limiter here?
+			sr = doGetStatus(servletContext, request, response, task, cache, statusCache);
+			statusCache.put(task, sr);
+		}
+		return sr;
+	}
+
+	private static StatusResult doGetStatus(
+		ServletContext servletContext,
+		HttpServletRequest request,
+		HttpServletResponse response,
+		Task task,
+		Cache cache,
+		Map<Task,StatusResult> statusCache
+	) throws TaskException, ServletException, IOException {
+		UnmodifiableCalendar on = task.getOn();
+		Recurring recurring = task.getRecurring();
+		boolean relative = task.getRelative();
+		// Check if all dependencies are completed
+		boolean allDoBeforesCompleted = true;
+		// TODO: Concurrent getDoBefores?
+		for(ElementRef doBeforeRef : task.getDoBefores()) {
+			Page capturedPage = CapturePage.capturePage(
+				servletContext,
+				request,
+				response,
+				doBeforeRef.getPageRef(),
+				CaptureLevel.META,
+				cache
+			);
+			String taskId = doBeforeRef.getId();
+			Element elem = capturedPage.getElementsById().get(taskId);
+			if(elem == null) throw new TaskException("doBefore not found: " + doBeforeRef);
+			if(!(elem instanceof Task)) throw new TaskException("doBefore is not a task: " + elem.getClass().getName());
+			if(capturedPage.getGeneratedIds().contains(taskId)) throw new TaskException("Not allowed to reference task by generated id, set an explicit id on the task: " + elem);
+			Task doBefore = (Task)elem;
+			StatusResult doBeforeStatus = getStatus(
+				servletContext,
+				request,
+				response,
+				doBefore,
+				cache,
+				statusCache
+			);
+			if(!doBeforeStatus.isCompletedSchedule()) {
+				allDoBeforesCompleted = false;
+				break;
+			}
+		}
+		final Calendar today = CalendarUtils.getToday();
+		final long todayMillis = today.getTimeInMillis();
+		TaskLog taskLog = task.getTaskLog();
+		if(on==null && recurring==null) {
+			// Non-scheduled task
+			TaskLog.Entry entry = taskLog.getMostRecentEntry(null);
+			if(entry != null) {
+				TaskLog.Status entryStatus = entry.getStatus();
+				if(entryStatus==TaskLog.Status.PROGRESS) {
+					// If marked with "Progress" on or after today, will be moved to the future list
+					long entryOnMillis = entry.getOn().getTimeInMillis();
+					boolean future = entryOnMillis >= todayMillis;
+					return new StatusResult(
+						StatusResult.StatusCssClass.getStatusCssClass(TaskLog.Status.PROGRESS),
+						entryOnMillis == todayMillis
+							? "Progress Today"
+							: ("Progress on " + CalendarUtils.formatDate(entry.getOn())),
+						entry.getComments(),
+						false,
+						!future && allDoBeforesCompleted,
+						future,
+						null
+					);
+				} else {
+					return new StatusResult(
+						entryStatus,
+						entry.getComments(),
+						allDoBeforesCompleted,
+						false,
+						null
+					);
+				}
+			}
+			if(allDoBeforesCompleted) {
+				return new StatusResult(
+					StatusResult.StatusCssClass.task_status_new,
+					"New",
+					null,
+					false,
+					true,
+					false,
+					null
+				);
+			} else {
+				return new StatusResult(
+					StatusResult.StatusCssClass.task_status_new_waiting_do_after,
+					"New waiting for \"Do Before\"",
+					null,
+					false,
+					false,
+					false,
+					null
+				);
+			}
+		} else if(on!=null && recurring==null) {
+			// Scheduled, non-recurring task
+			TaskLog.Entry entry = taskLog.getMostRecentEntry(on);
+			TaskLog.Status entryStatus = entry==null ? null : entry.getStatus();
+			if(entryStatus != null) {
+				assert entry != null;
+				if(entryStatus.isCompletedSchedule()) {
+					return new StatusResult(
+						entryStatus,
+						entry.getComments(),
+						allDoBeforesCompleted,
+						false,
+						on
+					);
+				} else if(entryStatus==TaskLog.Status.PROGRESS) {
+					long entryOnMillis = entry.getOn().getTimeInMillis();
+					if(entryOnMillis >= todayMillis) {
+						// If marked with "Progress" on or after today, will be moved to the future list
+						return new StatusResult(
+							StatusResult.StatusCssClass.getStatusCssClass(TaskLog.Status.PROGRESS),
+							entryOnMillis == todayMillis
+								? "Progress Today"
+								: ("Progress on " + CalendarUtils.formatDate(entry.getOn())),
+							entry.getComments(),
+							false,
+							false,
+							true,
+							on
+						);
+					}
+				}
+			}
+			// Past
+			if(on.before(today)) {
+				if(allDoBeforesCompleted) {
+					return new StatusResult(
+						StatusResult.StatusCssClass.task_status_late,
+						"Late " + CalendarUtils.formatDate(on),
+						entry!=null ? entry.getComments() : null,
+						false,
+						true,
+						false,
+						on
+					);
+				} else {
+					return new StatusResult(
+						StatusResult.StatusCssClass.task_status_late_waiting_do_after,
+						"Late " + CalendarUtils.formatDate(on) + " waiting for \"Do Before\"",
+						entry!=null ? entry.getComments() : null,
+						false,
+						false,
+						false,
+						on
+					);
+				}
+			}
+			// Present
+			if(on.getTimeInMillis() == todayMillis) {
+				if(allDoBeforesCompleted) {
+					return new StatusResult(
+						StatusResult.StatusCssClass.task_status_due_today,
+						"Due Today",
+						entry!=null ? entry.getComments() : null,
+						false,
+						true,
+						false,
+						on
+					);
+				} else {
+					return new StatusResult(
+						StatusResult.StatusCssClass.task_status_due_today_waiting_do_after,
+						"Due Today waiting for \"Do Before\"",
+						entry!=null ? entry.getComments() : null,
+						false,
+						false,
+						false,
+						on
+					);
+				}
+			}
+			// Future
+			if(entryStatus != null) {
+				assert entry != null;
+				return new StatusResult(
+					entryStatus,
+					entry.getComments(),
+					allDoBeforesCompleted,
+					!entryStatus.isCompletedSchedule(),
+					on
+				);
+			}
+			return new StatusResult(
+				StatusResult.StatusCssClass.task_status_in_future,
+				"Waiting until " + CalendarUtils.formatDate(on),
+				null,
+				false, // Was true, but if never done and waiting for future, it isn't completed
+				false,
+				true,
+				on
+			);
+		} else {
+			// Recurring task (possibly with null "on" date)
+			final Calendar firstIncomplete;
+			if(relative) {
+				// Will use "on" or today if no completed tasklog entry
+				Calendar recurringFrom = (on != null) ? on : today;
+				// Schedule from most recent completed tasklog entry
+				List<TaskLog.Entry> entries = taskLog.getEntries();
+				for(int i=entries.size()-1; i>=0; i--) {
+					TaskLog.Entry entry = entries.get(i);
+					if(entry.getStatus().isCompletedSchedule()) {
+						Calendar completedOn = entry.getOn();
+						SortedSet<? extends Calendar> scheduledOns = entry.getScheduledOns();
+						//String checkResult = recurring.checkScheduleFrom(completedOn, "relative");
+						//if(checkResult != null) throw new TaskException(checkResult);
+						Iterator<Calendar> recurringIter = recurring.getScheduleIterator(completedOn);
+						// Find the first date that is after both the completedOn and scheduledOn
+						do {
+							recurringFrom = recurringIter.next();
+						} while(
+							recurringFrom.getTimeInMillis() <= completedOn.getTimeInMillis()
+							|| (!scheduledOns.isEmpty() && recurringFrom.getTimeInMillis() <= scheduledOns.last().getTimeInMillis())
+						);
+						break;
+					}
+				}
+				// If "on" is after the determined recurringFrom, use "on"
+				if(on != null && on.getTimeInMillis() > recurringFrom.getTimeInMillis()) {
+					recurringFrom = on;
+				}
+				firstIncomplete = recurringFrom;
+			} else {
+				if(on == null) throw new TaskException("\"on\" date must be provided for non-relative recurring tasks");
+				firstIncomplete = taskLog.getFirstIncompleteScheduledOn(on, recurring);
+			}
+			if(firstIncomplete.before(today)) {
+				TaskLog.Entry entry = taskLog.getMostRecentEntry(firstIncomplete);
+				if(entry!=null) {
+					TaskLog.Status entryStatus = entry.getStatus();
+					if(entryStatus == TaskLog.Status.PROGRESS) {
+						long entryOnMillis = entry.getOn().getTimeInMillis();
+						if(entryOnMillis >= todayMillis) {
+							// If marked with "Progress" on or after today, will be moved to the future list
+							return new StatusResult(
+								StatusResult.StatusCssClass.getStatusCssClass(TaskLog.Status.PROGRESS),
+								entryOnMillis == todayMillis
+									? "Progress Today"
+									: ("Progress on " + CalendarUtils.formatDate(entry.getOn())),
+								entry.getComments(),
+								false,
+								false,
+								true,
+								firstIncomplete
+							);
+						}
+					}
+				}
+				if(allDoBeforesCompleted) {
+					return new StatusResult(
+						StatusResult.StatusCssClass.task_status_late,
+						"Late " + CalendarUtils.formatDate(firstIncomplete),
+						entry!=null ? entry.getComments() : null,
+						false,
+						true,
+						false,
+						firstIncomplete
+					);
+				} else {
+					return new StatusResult(
+						StatusResult.StatusCssClass.task_status_late_waiting_do_after,
+						"Late " + CalendarUtils.formatDate(firstIncomplete) + " waiting for \"Do Before\"",
+						entry!=null ? entry.getComments() : null,
+						false,
+						false,
+						false,
+						firstIncomplete
+					);
+				}
+			}
+			if(firstIncomplete.getTimeInMillis() == todayMillis) {
+				TaskLog.Entry entry = taskLog.getMostRecentEntry(firstIncomplete);
+				if(entry!=null) {
+					TaskLog.Status entryStatus = entry.getStatus();
+					if(entryStatus == TaskLog.Status.PROGRESS) {
+						long entryOnMillis = entry.getOn().getTimeInMillis();
+						if(entryOnMillis >= todayMillis) {
+							// If marked with "Progress" on or after today, will be moved to the future list
+							return new StatusResult(
+								StatusResult.StatusCssClass.getStatusCssClass(TaskLog.Status.PROGRESS),
+								entryOnMillis == todayMillis
+									? "Progress Today"
+									: ("Progress on " + CalendarUtils.formatDate(entry.getOn())),
+								entry.getComments(),
+								false,
+								false,
+								true,
+								firstIncomplete
+							);
+						}
+					}
+				}
+				if(allDoBeforesCompleted) {
+					return new StatusResult(
+						StatusResult.StatusCssClass.task_status_due_today,
+						"Due Today",
+						entry!=null ? entry.getComments() : null,
+						false,
+						true,
+						false,
+						firstIncomplete
+					);
+				} else {
+					return new StatusResult(
+						StatusResult.StatusCssClass.task_status_due_today_waiting_do_after,
+						"Due Today waiting for \"Do Before\"",
+						entry!=null ? entry.getComments() : null,
+						false,
+						false,
+						false,
+						firstIncomplete
+					);
+				}
+			}
+			return new StatusResult(
+				StatusResult.StatusCssClass.task_status_in_future,
+				"Waiting until " + CalendarUtils.formatDate(firstIncomplete),
+				null,
+				true,
+				false,
+				true,
+				firstIncomplete
+			);
+		}
+	}
+
+	public static Map<Task,StatusResult> getMultipleStatuses(
+		ServletContext servletContext,
+		HttpServletRequest request,
+		HttpServletResponse response,
+		Collection<? extends Task> tasks
+	) throws TaskException, ServletException, IOException {
+		return getMultipleStatuses(
+			servletContext,
+			request,
+			response,
+			tasks,
+			CacheFilter.getCache(request)
+		);
+	}
+
+	public static Map<Task,StatusResult> getMultipleStatuses(
+		final ServletContext servletContext,
+		HttpServletRequest request,
+		HttpServletResponse response,
+		Collection<? extends Task> tasks,
+		final Cache cache
+	) throws TaskException, ServletException, IOException {
+		int size = tasks.size();
+		if(size == 0) {
+			return Collections.emptyMap();
+		} else {
+			final Map<Task,StatusResult> statusCache = getStatusCache(cache);
+			if(size == 1) {
+				Task task = tasks.iterator().next();
+				return Collections.singletonMap(
+					task,
+					getStatus(
+						servletContext,
+						request,
+						response,
+						task,
+						cache,
+						statusCache
+					)
+				);
+			} else {
+				Map<Task,StatusResult> results = new LinkedHashMap<Task,StatusResult>(size *4/3+1);
+				List<Task> notCached = null; // Created when first needed
+				for(Task task : tasks) {
+					StatusResult cached = statusCache.get(task);
+					// Add entry even if null to set ordering, replacing this value later will not alter order
+					results.put(task, cached);
+					if(cached == null) {
+						if(notCached == null) notCached = new ArrayList<Task>(size - results.size());
+						notCached.add(task);
+					}
+				}
+				if(notCached != null) {
+					int notCachedSize = notCached.size();
+					assert notCachedSize > 0;
+					if(
+						notCachedSize > 1
+						&& CountConcurrencyFilter.useConcurrentSubrequests(request)
+					) {
+						System.err.println("notCachedSize = " + notCachedSize + ", doing concurrent getStatus"); // TODO: Remove for production
+						// Concurrent implementation
+						List<Callable<StatusResult>> concurrentTasks = new ArrayList<Callable<StatusResult>>(notCachedSize);
+						{
+							final HttpServletRequest threadSafeReq = new UnmodifiableCopyHttpServletRequest(request);
+							final HttpServletResponse threadSafeResp = new UnmodifiableCopyHttpServletResponse(response);
+							final TempFileList tempFileList = TempFileContext.getTempFileList(request);
+							for(final Task task : notCached) {
+								concurrentTasks.add(
+									new Callable<StatusResult>() {
+										@Override
+										public StatusResult call() throws TaskException, ServletException, IOException {
+											HttpServletRequest subrequest = new HttpServletSubRequest(threadSafeReq);
+											HttpServletResponse subresponse = new HttpServletSubResponse(threadSafeResp, tempFileList);
+											return getStatus(
+												servletContext,
+												subrequest,
+												subresponse,
+												task,
+												cache,
+												statusCache
+											);
+										}
+									}
+								);
+							}
+						}
+						List<StatusResult> concurrentResults;
+						try {
+							concurrentResults = SemanticCMS.getInstance(servletContext).getExecutors().getPerProcessor().callAll(concurrentTasks);
+						} catch(InterruptedException e) {
+							// Restore the interrupted status
+							Thread.currentThread().interrupt();
+							throw new ServletException(e);
+						} catch(ExecutionException e) {
+							Throwable cause = e.getCause();
+							if(cause instanceof RuntimeException) throw (RuntimeException)cause;
+							if(cause instanceof TaskException) throw (TaskException)cause;
+							if(cause instanceof ServletException) throw (ServletException)cause;
+							if(cause instanceof IOException) throw (IOException)cause;
+							throw new ServletException(cause);
+						}
+						for(int i=0; i<notCachedSize; i++) {
+							results.put(
+								notCached.get(i),
+								concurrentResults.get(i)
+							);
+						}
+					} else {
+						// Sequential implementation
+						for(Task task : notCached) {
+							results.put(
+								task,
+								getStatus(
+									servletContext,
+									request,
+									response,
+									task,
+									cache,
+									statusCache
+								)
+							);
+						}
+					}
+				}
+				assert results.size() == size;
+				return Collections.unmodifiableMap(results);
+			}
+		}
+	}
+
 	/**
 	 * Finds all tasks that must be done after this task.
 	 * This requires a capture of the entire page tree
@@ -132,26 +706,21 @@ final public class TaskUtil {
 			response,
 			SemanticCMS.getInstance(servletContext).getRootBook().getContentRoot(),
 			CaptureLevel.META,
-			new CapturePage.PageHandler<Void>() {
+			new CapturePage.PageDepthHandler<Void>() {
 				@Override
-				public Void handlePage(Page page) throws ServletException, IOException {
-					try {
-						for(Element element : page.getElements()) {
-							if(element instanceof Task) {
-								Task pageTask = (Task)element;
-								for(TaskLookup doBeforeLookup : pageTask.getDoBefores()) {
-									Task doBefore = doBeforeLookup.getTask();
-									if(
-										doBefore.getPage().equals(taskPage)
-										&& doBefore.getId().equals(taskId)
-									) {
-										doAfters.add(pageTask);
-									}
+				public Void handlePage(Page page, int depth) throws ServletException, IOException {
+					for(Element element : page.getElements()) {
+						if(element instanceof Task) {
+							Task pageTask = (Task)element;
+							for(ElementRef doBefore : pageTask.getDoBefores()) {
+								if(
+									doBefore.getPageRef().equals(taskPage.getPageRef())
+									&& doBefore.getId().equals(taskId)
+								) {
+									doAfters.add(pageTask);
 								}
 							}
 						}
-					} catch(TaskException e) {
-						throw new ServletException(e);
 					}
 					return null;
 				}
@@ -175,8 +744,8 @@ final public class TaskUtil {
 
 	/**
 	 * Finds all tasks that must be done after each of the provided tasks.
-	 * This requires a capture of the entire page tree
-	 * meta data to find any task that has a doBefore pointing to each task.
+	 * This requires a capture of the entire page tree meta data
+	 * to find any task that has a doBefore pointing to each task.
 	 *
 	 * @return  The map of doAfters, in the same iteration order as the provided
 	 *          tasks.  If no doAfters for a given task, will contain an empty list.
@@ -197,11 +766,20 @@ final public class TaskUtil {
 				getDoAfters(servletContext, request, response, task)
 			);
 		} else {
-			final Map<Task,List<Task>> results = new LinkedHashMap<Task,List<Task>>(size *4/3+1);
 			// Fill with empty lists, this sets the iteration order, too
+			final Map<Task,List<Task>> results = new LinkedHashMap<Task,List<Task>>(size *4/3+1);
+			// Build map from ElementRef back to Task, for fast lookup during traversal
+			final Map<ElementRef,Task> tasksByElementRef = new HashMap<ElementRef,Task>(size *4/3+1);
 			{
 				List<Task> emptyList = Collections.emptyList();
-				for(Task task : tasks) results.put(task, emptyList);
+				for(Task task : tasks) {
+					if(results.put(task, emptyList) != null) {
+						throw new AssertionError();
+					}
+					if(tasksByElementRef.put(task.getElementRef(), task) != null) {
+						throw new AssertionError();
+					}
+				}
 			}
 			CapturePage.traversePagesDepthFirst(
 				servletContext,
@@ -209,17 +787,18 @@ final public class TaskUtil {
 				response,
 				SemanticCMS.getInstance(servletContext).getRootBook().getContentRoot(),
 				CaptureLevel.META,
-				new CapturePage.PageHandler<Void>() {
+				new CapturePage.PageDepthHandler<Void>() {
 					@Override
-					public Void handlePage(Page page) throws ServletException, IOException {
+					public Void handlePage(Page page, int depth) throws ServletException, IOException {
 						try {
 							for(Element element : page.getElements()) {
 								if(element instanceof Task) {
 									Task pageTask = (Task)element;
-									for(TaskLookup doBeforeLookup : pageTask.getDoBefores()) {
-										Task doBefore = doBeforeLookup.getTask();
-										List<Task> doAfters = results.get(doBefore);
-										if(doAfters != null) {
+									for(ElementRef doBeforeRef : pageTask.getDoBefores()) {
+										Task doBefore = tasksByElementRef.get(doBeforeRef);
+										if(doBefore != null) {
+											if(doBefore.getPage().getGeneratedIds().contains(doBefore.getId())) throw new TaskException("Not allowed to reference task by generated id, set an explicit id on the task: " + doBefore);
+											List<Task> doAfters = results.get(doBefore);
 											int doAftersSize = doAfters.size();
 											if(doAftersSize == 0) {
 												results.put(doBefore, Collections.singletonList(pageTask));
@@ -236,10 +815,10 @@ final public class TaskUtil {
 									}
 								}
 							}
+							return null;
 						} catch(TaskException e) {
 							throw new ServletException(e);
 						}
-						return null;
 					}
 				},
 				new CapturePage.TraversalEdges() {
@@ -286,38 +865,18 @@ final public class TaskUtil {
 		return EnumSet.allOf(User.class);
 	}
 
-	private static class TaskKey {
-		private final PageRef pageRef;
-		private final String taskId;
-
-		private TaskKey(PageRef pageRef, String taskId) {
-			this.pageRef = pageRef;
-			this.taskId = taskId;
-		}
-
-		@Override
-		public boolean equals(Object o) {
-			if(!(o instanceof TaskKey)) return false;
-			TaskKey other = (TaskKey)o;
-			return
-				pageRef.equals(other.pageRef)
-				&& taskId.equals(other.taskId)
-			;
-		}
-
-		@Override
-		public int hashCode() {
-			return pageRef.hashCode() * 31 + taskId.hashCode();
-		}
-	}
-
 	private static Priority getEffectivePriority(
+		ServletContext servletContext,
+		HttpServletRequest request,
+		HttpServletResponse response,
+		Cache cache,
+		Map<Task,StatusResult> statusCache,
 		long now,
 		Task task,
-		Task.StatusResult status,
+		StatusResult status,
 		Map<Task,List<Task>> doAftersByTask,
 		Map<Task,Priority> effectivePriorities
-	) throws TaskException, IOException {
+	) throws TaskException, ServletException, IOException {
 		Priority cached = effectivePriorities.get(task);
 		if(cached != null) return cached;
 		// Find the maximum priority of this task and all that will be done after it
@@ -326,13 +885,31 @@ final public class TaskUtil {
 			List<Task> doAfters = doAftersByTask.get(task);
 			if(doAfters != null) {
 				for(Task doAfter : doAfters) {
-					Task.StatusResult doAfterStatus = doAfter.getStatus();
+					StatusResult doAfterStatus = getStatus(
+						servletContext,
+						request,
+						response,
+						doAfter,
+						cache,
+						statusCache
+					);
 					if(
 						!doAfterStatus.isCompletedSchedule()
 						&& !doAfterStatus.isReadySchedule()
 						&& !doAfterStatus.isFutureSchedule()
 					) {
-						Priority inherited = getEffectivePriority(now, doAfter, doAfterStatus, doAftersByTask, effectivePriorities);
+						Priority inherited = getEffectivePriority(
+							servletContext,
+							request,
+							response,
+							cache,
+							statusCache,
+							now,
+							doAfter,
+							doAfterStatus,
+							doAftersByTask,
+							effectivePriorities
+						);
 						if(inherited.compareTo(effective) > 0) {
 							effective = inherited;
 							if(effective == Priority.MAX_PRIORITY) break;
@@ -347,13 +924,15 @@ final public class TaskUtil {
 	}
 
 	public static List<Task> prioritizeTasks(
-		ServletContext servletContext,
-		HttpServletRequest request,
-		HttpServletResponse response,
-		List<? extends Task> tasks,
+		final ServletContext servletContext,
+		final HttpServletRequest request,
+		final HttpServletResponse response,
+		Collection<? extends Task> tasks,
 		final boolean dateFirst
-	) throws ServletException, IOException {
+	) throws TaskException, ServletException, IOException {
 		final long now = System.currentTimeMillis();
+		final Cache cache = CacheFilter.getCache(request);
+		final Map<Task,StatusResult> statusCache = getStatusCache(cache);
 		// Priority inheritance
 		List<Task> allTasks = getAllTasks(
 			servletContext,
@@ -369,29 +948,19 @@ final public class TaskUtil {
 			null
 		);
 		// Index tasks by page,id
-		Map<TaskKey,Task> tasksByKey = new HashMap<TaskKey,Task>(allTasks.size()*4/3+1);
+		Map<ElementRef,Task> tasksByKey = new HashMap<ElementRef,Task>(allTasks.size()*4/3+1);
 		for(Task task : allTasks) {
-			if(
-				tasksByKey.put(
-					new TaskKey(
-						task.getPage().getPageRef(),
-						task.getId()
-					),
-					task
-				) != null
-			) throw new AssertionError("Duplicate task (page, id)");
+			if(tasksByKey.put(task.getElementRef(), task) != null) {
+				throw new AssertionError("Duplicate task (page, id)");
+			}
 		}
 		// Invert dependency DAG for fast lookups for priority inheritance
 		final Map<Task,List<Task>> doAftersByTask = new LinkedHashMap<Task,List<Task>>(allTasks.size()*4/3+1);
 		for(Task task : allTasks) {
-			for(TaskLookup doBeforeLookup : task.getDoBefores()) {
-				Task doBefore = tasksByKey.get(
-					new TaskKey(
-						doBeforeLookup.getPageRef(),
-						doBeforeLookup.getTaskId()
-					)
-				);
-				if(doBefore==null) throw new AssertionError("Task not found: page=" + doBeforeLookup.getPageRef()+", id=" + doBeforeLookup.getTaskId());
+			for(ElementRef doBeforeRef : task.getDoBefores()) {
+				Task doBefore = tasksByKey.get(doBeforeRef);
+				if(doBefore==null) throw new AssertionError("Task not found: " + doBeforeRef);
+				if(doBefore.getPage().getGeneratedIds().contains(doBefore.getId())) throw new TaskException("Not allowed to reference task by generated id, set an explicit id on the task: " + doBefore);
 				List<Task> doAfters = doAftersByTask.get(doBefore);
 				if(doAfters == null) {
 					doAfters = new ArrayList<Task>();
@@ -407,10 +976,10 @@ final public class TaskUtil {
 		Collections.sort(
 			sortedTasks,
 			new Comparator<Task>() {
-				private int dateDiff(Task t1, Task t2) throws TaskException, IOException {
+				private int dateDiff(Task t1, Task t2) throws TaskException, ServletException, IOException {
 					// Sort by scheduled or unscheduled
-					Task.StatusResult status1 = t1.getStatus();
-					Task.StatusResult status2 = t2.getStatus();
+					StatusResult status1 = getStatus(servletContext, request, response, t1, cache, statusCache);
+					StatusResult status2 = getStatus(servletContext, request, response, t2, cache, statusCache);
 					Calendar date1 = status1.getDate();
 					Calendar date2 = status2.getDate();
 					int diff = ComparatorUtils.compare(date2!=null, date1!=null);
@@ -433,8 +1002,30 @@ final public class TaskUtil {
 							if(diff!=0) return diff;
 						}
 						// Sort by priority (including priority inheritance)
-						Priority priority1 = getEffectivePriority(now, t1, t1.getStatus(), doAftersByTask, effectivePriorities);
-						Priority priority2 = getEffectivePriority(now, t2, t2.getStatus(), doAftersByTask, effectivePriorities);
+						Priority priority1 = getEffectivePriority(
+							servletContext,
+							request,
+							response,
+							cache,
+							statusCache,
+							now,
+							t1,
+							getStatus(servletContext, request, response, t1, cache, statusCache),
+							doAftersByTask,
+							effectivePriorities
+						);
+						Priority priority2 = getEffectivePriority(
+							servletContext,
+							request,
+							response,
+							cache,
+							statusCache,
+							now,
+							t2,
+							getStatus(servletContext, request, response, t2, cache, statusCache),
+							doAftersByTask,
+							effectivePriorities
+						);
 						int diff = priority2.compareTo(priority1);
 						if(diff!=0) return diff;
 						// Sort by date (when priority first)
@@ -445,6 +1036,8 @@ final public class TaskUtil {
 						// Equal
 						return 0;
 					} catch(TaskException e) {
+						throw new WrappedException(e);
+					} catch(ServletException e) {
 						throw new WrappedException(e);
 					} catch(IOException e) {
 						throw new WrappedException(e);
@@ -499,9 +1092,9 @@ final public class TaskUtil {
 				response,
 				rootPage,
 				CaptureLevel.META,
-				new CapturePage.PageHandler<Void>() {
+				new CapturePage.PageDepthHandler<Void>() {
 					@Override
-					public Void handlePage(Page page) throws ServletException, IOException {
+					public Void handlePage(Page page, int depth) throws ServletException, IOException {
 						for(Element element : page.getElements()) {
 							if(element instanceof Task) {
 								Task task = (Task)element;
@@ -538,15 +1131,17 @@ final public class TaskUtil {
 	private static final String HAS_ASSIGNED_TASK_CACHE_KEY = TaskUtil.class.getName() + ".hasAssignedTask";
 
 	public static boolean hasAssignedTask(
-		ServletContext servletContext,
-		HttpServletRequest request,
-		HttpServletResponse response,
+		final ServletContext servletContext,
+		final HttpServletRequest request,
+		final HttpServletResponse response,
 		Page page,
 		final User user
 	) throws ServletException, IOException {
 		PageUserKey cacheKey = new PageUserKey(page, user);
-		Map<PageUserKey,Boolean> cache = getPageUserCache(CacheFilter.getCache(request), HAS_ASSIGNED_TASK_CACHE_KEY);
-		Boolean result = cache.get(cacheKey);
+		final Cache cache = CacheFilter.getCache(request);
+		final Map<Task,StatusResult> statusCache = getStatusCache(cache);
+		Map<PageUserKey,Boolean> hasAssignedTaskCache = getPageUserCache(cache, HAS_ASSIGNED_TASK_CACHE_KEY);
+		Boolean result = hasAssignedTaskCache.get(cacheKey);
 		if(result == null) {
 			final long now = System.currentTimeMillis();
 			result = CapturePage.traversePagesAnyOrder(
@@ -567,7 +1162,14 @@ final public class TaskUtil {
 										user == null
 										|| assignedTo != null
 									) {
-										Task.StatusResult status = task.getStatus();
+										StatusResult status = getStatus(
+											servletContext,
+											request,
+											response,
+											task,
+											cache,
+											statusCache
+										);
 										Priority priority = null;
 										// getReadyTasks logic
 										if(
@@ -660,7 +1262,7 @@ final public class TaskUtil {
 					}
 				}
 			) != null;
-			cache.put(cacheKey, result);
+			hasAssignedTaskCache.put(cacheKey, result);
 		}
 		return result;
 	}
@@ -668,15 +1270,17 @@ final public class TaskUtil {
 	private static final String GET_READY_TASKS_CACHE_KEY = TaskUtil.class.getName() + ".getReadyTasks";
 
 	public static List<Task> getReadyTasks(
-		ServletContext servletContext,
-		HttpServletRequest request,
-		HttpServletResponse response,
+		final ServletContext servletContext,
+		final HttpServletRequest request,
+		final HttpServletResponse response,
 		Page rootPage,
 		final User user
 	) throws IOException, ServletException {
 		PageUserKey cacheKey = new PageUserKey(rootPage, user);
-		Map<PageUserKey,List<Task>> cache = getPageUserCache(CacheFilter.getCache(request), GET_READY_TASKS_CACHE_KEY);
-		List<Task> results = cache.get(cacheKey);
+		final Cache cache = CacheFilter.getCache(request);
+		final Map<Task,StatusResult> statusCache = getStatusCache(cache);
+		Map<PageUserKey,List<Task>> getReadyTasksCache = getPageUserCache(cache, GET_READY_TASKS_CACHE_KEY);
+		List<Task> results = getReadyTasksCache.get(cacheKey);
 		if(results == null) {
 			final long now = System.currentTimeMillis();
 			final List<Task> readyTasks = new ArrayList<Task>();
@@ -686,9 +1290,9 @@ final public class TaskUtil {
 				response,
 				rootPage,
 				CaptureLevel.META,
-				new CapturePage.PageHandler<Void>() {
+				new CapturePage.PageDepthHandler<Void>() {
 					@Override
-					public Void handlePage(Page page) throws ServletException, IOException {
+					public Void handlePage(Page page, int depth) throws ServletException, IOException {
 						try {
 							for(Element element : page.getElements()) {
 								if(element instanceof Task) {
@@ -698,7 +1302,14 @@ final public class TaskUtil {
 										user == null
 										|| assignedTo != null
 									) {
-										Task.StatusResult status = task.getStatus();
+										StatusResult status = getStatus(
+											servletContext,
+											request,
+											response,
+											task,
+											cache,
+											statusCache
+										);
 										if(
 											!status.isCompletedSchedule()
 											&& status.isReadySchedule()
@@ -747,7 +1358,7 @@ final public class TaskUtil {
 				null
 			);
 			results = Collections.unmodifiableList(readyTasks);
-			cache.put(cacheKey, results);
+			getReadyTasksCache.put(cacheKey, results);
 		}
 		return results;
 	}
@@ -755,15 +1366,17 @@ final public class TaskUtil {
 	private static final String GET_BLOCKED_TASKS_CACHE_KEY = TaskUtil.class.getName() + ".getBlockedTasks";
 
 	public static List<Task> getBlockedTasks(
-		ServletContext servletContext,
-		HttpServletRequest request,
-		HttpServletResponse response,
+		final ServletContext servletContext,
+		final HttpServletRequest request,
+		final HttpServletResponse response,
 		Page rootPage,
 		final User user
 	) throws IOException, ServletException {
 		PageUserKey cacheKey = new PageUserKey(rootPage, user);
-		Map<PageUserKey,List<Task>> cache = getPageUserCache(CacheFilter.getCache(request), GET_BLOCKED_TASKS_CACHE_KEY);
-		List<Task> results = cache.get(cacheKey);
+		final Cache cache = CacheFilter.getCache(request);
+		final Map<Task,StatusResult> statusCache = getStatusCache(cache);
+		Map<PageUserKey,List<Task>> getBlockedTasksCache = getPageUserCache(cache, GET_BLOCKED_TASKS_CACHE_KEY);
+		List<Task> results = getBlockedTasksCache.get(cacheKey);
 		if(results == null) {
 			final long now = System.currentTimeMillis();
 			final List<Task> blockedTasks = new ArrayList<Task>();
@@ -773,9 +1386,9 @@ final public class TaskUtil {
 				response,
 				rootPage,
 				CaptureLevel.META,
-				new CapturePage.PageHandler<Void>() {
+				new CapturePage.PageDepthHandler<Void>() {
 					@Override
-					public Void handlePage(Page page) throws ServletException, IOException {
+					public Void handlePage(Page page, int depth) throws ServletException, IOException {
 						try {
 							for(Element element : page.getElements()) {
 								if(element instanceof Task) {
@@ -785,7 +1398,14 @@ final public class TaskUtil {
 										user == null
 										|| assignedTo != null
 									) {
-										Task.StatusResult status = task.getStatus();
+										StatusResult status = getStatus(
+											servletContext,
+											request,
+											response,
+											task,
+											cache,
+											statusCache
+										);
 										if(
 											!status.isCompletedSchedule()
 											&& !status.isReadySchedule()
@@ -835,7 +1455,7 @@ final public class TaskUtil {
 				null
 			);
 			results = Collections.unmodifiableList(blockedTasks);
-			cache.put(cacheKey, results);
+			getBlockedTasksCache.put(cacheKey, results);
 		}
 		return results;
 	}
@@ -843,15 +1463,17 @@ final public class TaskUtil {
 	private static final String FUTURE_TASKS_CACHE_KEY = TaskUtil.class.getName() + ".getFutureTasks";
 
 	public static List<Task> getFutureTasks(
-		ServletContext servletContext,
-		HttpServletRequest request,
-		HttpServletResponse response,
+		final ServletContext servletContext,
+		final HttpServletRequest request,
+		final HttpServletResponse response,
 		Page rootPage,
 		final User user
 	) throws IOException, ServletException {
 		PageUserKey cacheKey = new PageUserKey(rootPage, user);
-		Map<PageUserKey,List<Task>> cache = getPageUserCache(CacheFilter.getCache(request), FUTURE_TASKS_CACHE_KEY);
-		List<Task> results = cache.get(cacheKey);
+		final Cache cache = CacheFilter.getCache(request);
+		final Map<Task,StatusResult> statusCache = getStatusCache(cache);
+		Map<PageUserKey,List<Task>> futureTasksCache = getPageUserCache(cache, FUTURE_TASKS_CACHE_KEY);
+		List<Task> results = futureTasksCache.get(cacheKey);
 		if(results == null) {
 			final long now = System.currentTimeMillis();
 			final List<Task> futureTasks = new ArrayList<Task>();
@@ -861,9 +1483,9 @@ final public class TaskUtil {
 				response,
 				rootPage,
 				CaptureLevel.META,
-				new CapturePage.PageHandler<Void>() {
+				new CapturePage.PageDepthHandler<Void>() {
 					@Override
-					public Void handlePage(Page page) throws ServletException, IOException {
+					public Void handlePage(Page page, int depth) throws ServletException, IOException {
 						try {
 							for(Element element : page.getElements()) {
 								if(element instanceof Task) {
@@ -879,7 +1501,14 @@ final public class TaskUtil {
 											|| assignedTo.getAfter().getCount() == 0
 										)
 									) {
-										Task.StatusResult status = task.getStatus();
+										StatusResult status = getStatus(
+											servletContext,
+											request,
+											response,
+											task,
+											cache,
+											statusCache
+										);
 										boolean future = status.isFutureSchedule();
 										if(!future) {
 											Priority priority = TaskImpl.getPriorityForStatus(now, task, status);
@@ -913,7 +1542,7 @@ final public class TaskUtil {
 				null
 			);
 			results = Collections.unmodifiableList(futureTasks);
-			cache.put(cacheKey, results);
+			futureTasksCache.put(cacheKey, results);
 		}
 		return results;
 	}
