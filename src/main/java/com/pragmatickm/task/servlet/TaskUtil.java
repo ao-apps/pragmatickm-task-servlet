@@ -38,6 +38,7 @@ import com.pragmatickm.task.model.TaskException;
 import com.pragmatickm.task.model.TaskLog;
 import com.pragmatickm.task.model.User;
 import com.pragmatickm.task.servlet.impl.TaskImpl;
+import com.semanticcms.core.model.ChildRef;
 import com.semanticcms.core.model.Element;
 import com.semanticcms.core.model.ElementRef;
 import com.semanticcms.core.model.Page;
@@ -727,8 +728,8 @@ final public class TaskUtil {
 			},
 			new CapturePage.TraversalEdges() {
 				@Override
-				public Collection<PageRef> getEdges(Page page) {
-					return page.getChildPages();
+				public Collection<ChildRef> getEdges(Page page) {
+					return page.getChildRefs();
 				}
 			},
 			new CapturePage.EdgeFilter() {
@@ -823,8 +824,8 @@ final public class TaskUtil {
 				},
 				new CapturePage.TraversalEdges() {
 					@Override
-					public Collection<PageRef> getEdges(Page page) {
-						return page.getChildPages();
+					public Collection<ChildRef> getEdges(Page page) {
+						return page.getChildRefs();
 					}
 				},
 				new CapturePage.EdgeFilter() {
@@ -1109,8 +1110,8 @@ final public class TaskUtil {
 				},
 				new CapturePage.TraversalEdges() {
 					@Override
-					public Collection<PageRef> getEdges(Page page) {
-						return page.getChildPages();
+					public Collection<ChildRef> getEdges(Page page) {
+						return page.getChildRefs();
 					}
 				},
 				new CapturePage.EdgeFilter() {
@@ -1250,8 +1251,8 @@ final public class TaskUtil {
 				},
 				new CapturePage.TraversalEdges() {
 					@Override
-					public Collection<PageRef> getEdges(Page page) {
-						return page.getChildPages();
+					public Collection<ChildRef> getEdges(Page page) {
+						return page.getChildRefs();
 					}
 				},
 				new CapturePage.EdgeFilter() {
@@ -1344,8 +1345,8 @@ final public class TaskUtil {
 				},
 				new CapturePage.TraversalEdges() {
 					@Override
-					public Collection<PageRef> getEdges(Page page) {
-						return page.getChildPages();
+					public Collection<ChildRef> getEdges(Page page) {
+						return page.getChildRefs();
 					}
 				},
 				new CapturePage.EdgeFilter() {
@@ -1441,8 +1442,8 @@ final public class TaskUtil {
 				},
 				new CapturePage.TraversalEdges() {
 					@Override
-					public Collection<PageRef> getEdges(Page page) {
-						return page.getChildPages();
+					public Collection<ChildRef> getEdges(Page page) {
+						return page.getChildRefs();
 					}
 				},
 				new CapturePage.EdgeFilter() {
@@ -1528,8 +1529,8 @@ final public class TaskUtil {
 				},
 				new CapturePage.TraversalEdges() {
 					@Override
-					public Collection<PageRef> getEdges(Page page) {
-						return page.getChildPages();
+					public Collection<ChildRef> getEdges(Page page) {
+						return page.getChildRefs();
 					}
 				},
 				new CapturePage.EdgeFilter() {
