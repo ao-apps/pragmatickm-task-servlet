@@ -3,6 +3,7 @@ Tasks nested within [SemanticCMS](https://semanticcms.com/) pages and elements i
 
 ## Project Links
 * [Project Home](https://pragmatickm.com/task/servlet/)
+* [Changelog](https://pragmatickm.com/task/servlet/changelog)
 * [API Docs](https://pragmatickm.com/task/servlet/apidocs/)
 * [Maven Repository](scpexe://private.cvs.aoindustries.com/var/maven2/pragmatickm)
 * [Git](ssh://private.cvs.aoindustries.com/var/git/pragmatickm-task-servlet)
