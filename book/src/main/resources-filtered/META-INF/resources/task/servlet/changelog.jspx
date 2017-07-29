@@ -75,7 +75,7 @@ along with pragmatickm-task-servlet.  If not, see <http://www.gnu.org/licenses /
 			datePublished="2017-07-20T18:54:11-0500"
 			groupId="@{documented.groupId}"
 			artifactId="@{documented.artifactId}"
-			repository="https://aorepo.org/maven2"
+			repository="https://aorepo.org/maven2/"
 			scmUrl="@{documented.scm.url}"
 		>
 			<ul>
@@ -90,7 +90,7 @@ along with pragmatickm-task-servlet.  If not, see <http://www.gnu.org/licenses /
 			datePublished="2016-11-16T21:51:44-0600"
 			groupId="@{documented.groupId}"
 			artifactId="@{documented.artifactId}"
-			repository="https://aorepo.org/maven2"
+			repository="https://aorepo.org/maven2/"
 			scmUrl="@{documented.scm.url}"
 		>
 			<ul>
@@ -106,7 +106,7 @@ along with pragmatickm-task-servlet.  If not, see <http://www.gnu.org/licenses /
 			datePublished="2016-10-20T20:13:30-0500"
 			groupId="@{documented.groupId}"
 			artifactId="@{documented.artifactId}"
-			repository="https://aorepo.org/maven2"
+			repository="https://aorepo.org/maven2/"
 			scmUrl="@{documented.scm.url}"
 		>
 			<ul>
@@ -121,7 +121,7 @@ along with pragmatickm-task-servlet.  If not, see <http://www.gnu.org/licenses /
 			datePublished="2016-10-05T00:08:36-0500"
 			groupId="@{documented.groupId}"
 			artifactId="@{documented.artifactId}"
-			repository="https://aorepo.org/maven2"
+			repository="https://aorepo.org/maven2/"
 			scmUrl="@{documented.scm.url}"
 		>
 			<ul>
@@ -149,7 +149,7 @@ along with pragmatickm-task-servlet.  If not, see <http://www.gnu.org/licenses /
 			datePublished="2016-09-11T17:42:22-0500"
 			groupId="@{documented.groupId}"
 			artifactId="@{documented.artifactId}"
-			repository="https://aorepo.org/maven2"
+			repository="https://aorepo.org/maven2/"
 			scmUrl="@{documented.scm.url}"
 		>
 			<ul>
@@ -164,7 +164,7 @@ along with pragmatickm-task-servlet.  If not, see <http://www.gnu.org/licenses /
 			datePublished="2016-09-03T11:37:38-0500"
 			groupId="@{documented.groupId}"
 			artifactId="@{documented.artifactId}"
-			repository="https://aorepo.org/maven2"
+			repository="https://aorepo.org/maven2/"
 			scmUrl="@{documented.scm.url}"
 		>
 			<ul>
@@ -179,7 +179,7 @@ along with pragmatickm-task-servlet.  If not, see <http://www.gnu.org/licenses /
 			datePublished="2016-08-30T19:14:25-0500"
 			groupId="@{documented.groupId}"
 			artifactId="@{documented.artifactId}"
-			repository="https://aorepo.org/maven2"
+			repository="https://aorepo.org/maven2/"
 			scmUrl="@{documented.scm.url}"
 		>
 			<ul>
