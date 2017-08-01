@@ -1,6 +1,6 @@
 /*
  * pragmatickm-task-servlet - Tasks nested within SemanticCMS pages and elements in a Servlet environment.
- * Copyright (C) 2013, 2014, 2015, 2016  AO Industries, Inc.
+ * Copyright (C) 2013, 2014, 2015, 2016, 2017  AO Industries, Inc.
  *     support@aoindustries.com
  *     7262 Bull Pen Cir
  *     Mobile, AL 36695
@@ -294,7 +294,7 @@ final public class TaskImpl {
 			xmlFilePath = xmlFilePath.substring(0, xmlFilePath.length() - REMOVE_JSPX_EXTENSION.length());
 		}
 		xmlFilePath = xmlFilePath + TASKLOG_MID + taskId + TASKLOG_EXTENSION;
-		return new PageRef(pageRef.getBook(), xmlFilePath);
+		return new PageRef(pageRef.getBookRef(), xmlFilePath);
 	}
 
 	public static Priority getPriorityForStatus(long now, Task task, StatusResult status) {

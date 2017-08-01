@@ -1,6 +1,6 @@
 /*
  * pragmatickm-task-servlet - Tasks nested within SemanticCMS pages and elements in a Servlet environment.
- * Copyright (C) 2013, 2014, 2015, 2016  AO Industries, Inc.
+ * Copyright (C) 2013, 2014, 2015, 2016, 2017  AO Industries, Inc.
  *     support@aoindustries.com
  *     7262 Bull Pen Cir
  *     Mobile, AL 36695
@@ -38,6 +38,7 @@ import com.pragmatickm.task.model.TaskException;
 import com.pragmatickm.task.model.TaskLog;
 import com.pragmatickm.task.model.User;
 import com.pragmatickm.task.servlet.impl.TaskImpl;
+import com.semanticcms.core.model.BookRef;
 import com.semanticcms.core.model.ChildRef;
 import com.semanticcms.core.model.Element;
 import com.semanticcms.core.model.ElementRef;
@@ -77,9 +78,10 @@ import javax.servlet.http.HttpServletResponse;
 
 final public class TaskUtil {
 
-	public static TaskLog getTaskLogInBook(
+	public static TaskLog getTaskLogInDomain(
 		ServletContext servletContext,
 		HttpServletRequest request,
+		String domain,
 		String book,
 		String page,
 		String taskId
@@ -87,13 +89,32 @@ final public class TaskUtil {
 		PageRef pageRef = PageRefResolver.getPageRef(
 			servletContext,
 			request,
+			domain,
 			book,
 			page
 		);
-		if(pageRef.getBook()==null) throw new IllegalArgumentException("Book not found: " + pageRef.getBookName());
+		// Book must be accessible
+		BookRef bookRef = pageRef.getBookRef();
+		if(!SemanticCMS.getInstance(servletContext).getBook(bookRef).isAccessible()) {
+			throw new IllegalArgumentException("Book is not accessible: " + bookRef);
+		}
 		return TaskLog.getTaskLog(
 			TaskImpl.getTaskLogXmlFile(pageRef, taskId)
 		);
+	}
+
+	/**
+	 * @deprecated  Please provide domain to {@link #getTaskLogInDomain(javax.servlet.ServletContext, javax.servlet.http.HttpServletRequest, java.lang.String, java.lang.String, java.lang.String, java.lang.String)}
+	 */
+	@Deprecated
+	public static TaskLog getTaskLogInBook(
+		ServletContext servletContext,
+		HttpServletRequest request,
+		String book,
+		String page,
+		String taskId
+	) throws ServletException, IOException {
+		return getTaskLogInDomain(servletContext, request, null, book, page, taskId);
 	}
 
 	public static TaskLog getTaskLog(
@@ -102,9 +123,10 @@ final public class TaskUtil {
 		String page,
 		String taskId
 	) throws ServletException, IOException {
-		return getTaskLogInBook(
+		return getTaskLogInDomain(
 			servletContext,
 			request,
+			null,
 			null,
 			page,
 			taskId
@@ -616,7 +638,7 @@ final public class TaskUtil {
 						notCachedSize > 1
 						&& CountConcurrencyFilter.useConcurrentSubrequests(request)
 					) {
-						System.err.println("notCachedSize = " + notCachedSize + ", doing concurrent getStatus"); // TODO: Remove for production
+						//System.err.println("notCachedSize = " + notCachedSize + ", doing concurrent getStatus");
 						// Concurrent implementation
 						List<Callable<StatusResult>> concurrentTasks = new ArrayList<Callable<StatusResult>>(notCachedSize);
 						{
@@ -701,11 +723,12 @@ final public class TaskUtil {
 		final String taskId = task.getId();
 		final Page taskPage = task.getPage();
 		final List<Task> doAfters = new ArrayList<Task>();
+		final SemanticCMS semanticCMS = SemanticCMS.getInstance(servletContext);
 		CapturePage.traversePagesDepthFirst(
 			servletContext,
 			request,
 			response,
-			SemanticCMS.getInstance(servletContext).getRootBook().getContentRoot(),
+			semanticCMS.getRootBook().getContentRoot(),
 			CaptureLevel.META,
 			new CapturePage.PageDepthHandler<Void>() {
 				@Override
@@ -735,7 +758,7 @@ final public class TaskUtil {
 			new CapturePage.EdgeFilter() {
 				@Override
 				public boolean applyEdge(PageRef childPage) {
-					return childPage.getBook() != null;
+					return semanticCMS.getBook(childPage.getBookRef()).isAccessible();
 				}
 			},
 			null
@@ -782,11 +805,12 @@ final public class TaskUtil {
 					}
 				}
 			}
+			final SemanticCMS semanticCMS = SemanticCMS.getInstance(servletContext);
 			CapturePage.traversePagesDepthFirst(
 				servletContext,
 				request,
 				response,
-				SemanticCMS.getInstance(servletContext).getRootBook().getContentRoot(),
+				semanticCMS.getRootBook().getContentRoot(),
 				CaptureLevel.META,
 				new CapturePage.PageDepthHandler<Void>() {
 					@Override
@@ -831,7 +855,7 @@ final public class TaskUtil {
 				new CapturePage.EdgeFilter() {
 					@Override
 					public boolean applyEdge(PageRef childPage) {
-						return childPage.getBook() != null;
+						return semanticCMS.getBook(childPage.getBookRef()).isAccessible();
 					}
 				},
 				null
@@ -1087,6 +1111,7 @@ final public class TaskUtil {
 		List<Task> results = cache.get(cacheKey);
 		if(results == null) {
 			final List<Task> allTasks = new ArrayList<Task>();
+			final SemanticCMS semanticCMS = SemanticCMS.getInstance(servletContext);
 			CapturePage.traversePagesDepthFirst(
 				servletContext,
 				request,
@@ -1117,8 +1142,8 @@ final public class TaskUtil {
 				new CapturePage.EdgeFilter() {
 					@Override
 					public boolean applyEdge(PageRef childPage) {
-						// Child not in missing book
-						return childPage.getBook() != null;
+						// Child in accessible book
+						return semanticCMS.getBook(childPage.getBookRef()).isAccessible();
 					}
 				},
 				null
@@ -1145,6 +1170,7 @@ final public class TaskUtil {
 		Boolean result = hasAssignedTaskCache.get(cacheKey);
 		if(result == null) {
 			final long now = System.currentTimeMillis();
+			final SemanticCMS semanticCMS = SemanticCMS.getInstance(servletContext);
 			result = CapturePage.traversePagesAnyOrder(
 				servletContext,
 				request,
@@ -1258,8 +1284,8 @@ final public class TaskUtil {
 				new CapturePage.EdgeFilter() {
 					@Override
 					public boolean applyEdge(PageRef childPage) {
-						// Child not in missing book
-						return childPage.getBook() != null;
+						// Child in accessible book
+						return semanticCMS.getBook(childPage.getBookRef()).isAccessible();
 					}
 				}
 			) != null;
@@ -1285,6 +1311,7 @@ final public class TaskUtil {
 		if(results == null) {
 			final long now = System.currentTimeMillis();
 			final List<Task> readyTasks = new ArrayList<Task>();
+			final SemanticCMS semanticCMS = SemanticCMS.getInstance(servletContext);
 			CapturePage.traversePagesDepthFirst(
 				servletContext,
 				request,
@@ -1352,8 +1379,8 @@ final public class TaskUtil {
 				new CapturePage.EdgeFilter() {
 					@Override
 					public boolean applyEdge(PageRef childPage) {
-						// Child not in missing book
-						return childPage.getBook() != null;
+						// Child in accessible book
+						return semanticCMS.getBook(childPage.getBookRef()).isAccessible();
 					}
 				},
 				null
@@ -1381,6 +1408,7 @@ final public class TaskUtil {
 		if(results == null) {
 			final long now = System.currentTimeMillis();
 			final List<Task> blockedTasks = new ArrayList<Task>();
+			final SemanticCMS semanticCMS = SemanticCMS.getInstance(servletContext);
 			CapturePage.traversePagesDepthFirst(
 				servletContext,
 				request,
@@ -1449,8 +1477,8 @@ final public class TaskUtil {
 				new CapturePage.EdgeFilter() {
 					@Override
 					public boolean applyEdge(PageRef childPage) {
-						// Child not in missing book
-						return childPage.getBook() != null;
+						// Child in accessible book
+						return semanticCMS.getBook(childPage.getBookRef()).isAccessible();
 					}
 				},
 				null
@@ -1478,6 +1506,7 @@ final public class TaskUtil {
 		if(results == null) {
 			final long now = System.currentTimeMillis();
 			final List<Task> futureTasks = new ArrayList<Task>();
+			final SemanticCMS semanticCMS = SemanticCMS.getInstance(servletContext);
 			CapturePage.traversePagesDepthFirst(
 				servletContext,
 				request,
@@ -1536,8 +1565,8 @@ final public class TaskUtil {
 				new CapturePage.EdgeFilter() {
 					@Override
 					public boolean applyEdge(PageRef childPage) {
-						// Child not in missing book
-						return childPage.getBook() != null;
+						// Child in accessible book
+						return semanticCMS.getBook(childPage.getBookRef()).isAccessible();
 					}
 				},
 				null
