@@ -104,9 +104,8 @@ final public class TaskUtil {
 	}
 
 	/**
-	 * @deprecated  Please provide domain to {@link #getTaskLogInDomain(javax.servlet.ServletContext, javax.servlet.http.HttpServletRequest, java.lang.String, java.lang.String, java.lang.String, java.lang.String)}
+	 * Gets the task log for the given book, page, and id within the domain of the current page.
 	 */
-	@Deprecated
 	public static TaskLog getTaskLogInBook(
 		ServletContext servletContext,
 		HttpServletRequest request,
@@ -117,20 +116,16 @@ final public class TaskUtil {
 		return getTaskLogInDomain(servletContext, request, null, book, page, taskId);
 	}
 
+	/**
+	 * Gets the task log for the given page and id within the book of the current page.
+	 */
 	public static TaskLog getTaskLog(
 		ServletContext servletContext,
 		HttpServletRequest request,
 		String page,
 		String taskId
 	) throws ServletException, IOException {
-		return getTaskLogInDomain(
-			servletContext,
-			request,
-			null,
-			null,
-			page,
-			taskId
-		);
+		return getTaskLogInDomain(servletContext, request, null, null, page, taskId);
 	}
 
 	public static TaskLog.Entry getMostRecentEntry(TaskLog taskLog, String statuses) throws IOException {
