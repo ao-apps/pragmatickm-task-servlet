@@ -38,6 +38,7 @@ import com.pragmatickm.task.model.TaskException;
 import com.pragmatickm.task.model.TaskPriority;
 import com.pragmatickm.task.servlet.StatusResult;
 import com.pragmatickm.task.servlet.TaskUtil;
+import com.semanticcms.core.model.BookRef;
 import com.semanticcms.core.model.Element;
 import com.semanticcms.core.model.ElementContext;
 import com.semanticcms.core.model.ElementRef;
@@ -322,7 +323,7 @@ final public class TaskImpl {
 			SemanticCMS semanticCMS = SemanticCMS.getInstance(servletContext);
 			for(int i=0; i<size; i++) {
 				Task task = tasks.get(i);
-				Page taskPage = task.getPage();
+				final Page taskPage = task.getPage();
 				StatusResult status = statuses.get(task);
 				Priority priority = getPriorityForStatus(now, task, status);
 				out.write("<tr>");
@@ -350,7 +351,8 @@ final public class TaskImpl {
 				}
 				out.write(" href=\"");
 				PageIndex pageIndex = PageIndex.getCurrentPageIndex(request);
-				Integer index = pageIndex==null ? null : pageIndex.getPageIndex(taskPage.getPageRef());
+				final PageRef taskPageRef = taskPage.getPageRef();
+				Integer index = pageIndex==null ? null : pageIndex.getPageIndex(taskPageRef);
 				if(index != null) {
 					// view=all mode
 					out.write('#');
@@ -365,11 +367,13 @@ final public class TaskImpl {
 					encodeTextInXhtmlAttribute(task.getId(), out);
 				} else {
 					// Task on other page, generate full link
+					BookRef taskBookRef = taskPageRef.getBookRef();
 					encodeTextInXhtmlAttribute(
 						response.encodeURL(
 							com.aoindustries.net.UrlUtils.encodeUrlPath(
 								request.getContextPath()
-									+ taskPage.getPageRef().getServletPath()
+									+ taskBookRef.getPrefix()
+									+ taskPageRef.getPath()
 									+ '#' + task.getId(),
 								response.getCharacterEncoding()
 							)
