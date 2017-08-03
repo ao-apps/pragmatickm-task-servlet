@@ -45,6 +45,7 @@ import com.semanticcms.core.model.ElementRef;
 import com.semanticcms.core.model.NodeBodyWriter;
 import com.semanticcms.core.model.Page;
 import com.semanticcms.core.model.PageRef;
+import com.semanticcms.core.model.ResourceRef;
 import com.semanticcms.core.servlet.Cache;
 import com.semanticcms.core.servlet.CacheFilter;
 import com.semanticcms.core.servlet.CaptureLevel;
@@ -287,15 +288,16 @@ final public class TaskImpl {
 	/**
 	 * Gets the file that stores the XML data for a task log.
 	 */
-	public static PageRef getTaskLogXmlFile(PageRef pageRef, String taskId) {
+	public static ResourceRef getTaskLogXmlFile(PageRef pageRef, String taskId) {
 		String xmlFilePath = pageRef.getPath();
+		// TODO: No longer strip these extensions once page refs are fully converted to being the abstract name
 		if(xmlFilePath.endsWith(REMOVE_JSP_EXTENSION)) {
 			xmlFilePath = xmlFilePath.substring(0, xmlFilePath.length() - REMOVE_JSP_EXTENSION.length());
 		} else if(xmlFilePath.endsWith(REMOVE_JSPX_EXTENSION)) {
 			xmlFilePath = xmlFilePath.substring(0, xmlFilePath.length() - REMOVE_JSPX_EXTENSION.length());
 		}
 		xmlFilePath = xmlFilePath + TASKLOG_MID + taskId + TASKLOG_EXTENSION;
-		return new PageRef(pageRef.getBookRef(), xmlFilePath);
+		return new ResourceRef(pageRef.getBookRef(), xmlFilePath);
 	}
 
 	public static Priority getPriorityForStatus(long now, Task task, StatusResult status) {
