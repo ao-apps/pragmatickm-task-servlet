@@ -44,6 +44,8 @@ import com.semanticcms.core.model.Element;
 import com.semanticcms.core.model.ElementRef;
 import com.semanticcms.core.model.Page;
 import com.semanticcms.core.model.PageRef;
+import com.semanticcms.core.model.ResourceRef;
+import com.semanticcms.core.model.ResourceStore;
 import com.semanticcms.core.repository.Book;
 import com.semanticcms.core.servlet.Cache;
 import com.semanticcms.core.servlet.CacheFilter;
@@ -95,15 +97,19 @@ final public class TaskUtil {
 			page
 		);
 		// Book must be accessible
-		BookRef bookRef = pageRef.getBookRef();
+		ResourceRef xmlFile = TaskImpl.getTaskLogXmlFile(pageRef, taskId);
+		BookRef bookRef = xmlFile.getBookRef();
 		Book bookObj = SemanticCMS.getInstance(servletContext).getBook(bookRef);
 		if(!bookObj.isAccessible()) {
-			throw new IllegalArgumentException("Book is not accessible: " + bookRef);
+			throw new IllegalArgumentException("Book is not accessible: " + xmlFile);
+		}
+		ResourceStore resourceStore = bookObj.getResourceStore();
+		if(resourceStore == null) {
+			throw new IllegalArgumentException("Resource store is not available: " + bookRef);
 		}
 		return TaskLog.getTaskLog(
-			bookObj.getResourceStore().getResource(
-				TaskImpl.getTaskLogXmlFile(pageRef, taskId)
-			)
+			resourceStore,
+			xmlFile
 		);
 	}
 
