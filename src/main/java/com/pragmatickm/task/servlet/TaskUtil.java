@@ -22,8 +22,8 @@
  */
 package com.pragmatickm.task.servlet;
 
-import com.aoindustries.io.TempFileList;
-import com.aoindustries.servlet.filter.TempFileContext;
+import com.aoindustries.tempfiles.TempFileContext;
+import com.aoindustries.tempfiles.servlet.ServletTempFileContext;
 import com.aoindustries.util.CalendarUtils;
 import com.aoindustries.util.ComparatorUtils;
 import com.aoindustries.util.StringUtility;
@@ -649,14 +649,14 @@ final public class TaskUtil {
 						{
 							final HttpServletRequest threadSafeReq = new UnmodifiableCopyHttpServletRequest(request);
 							final HttpServletResponse threadSafeResp = new UnmodifiableCopyHttpServletResponse(response);
-							final TempFileList tempFileList = TempFileContext.getTempFileList(request);
+							final TempFileContext tempFileContext = ServletTempFileContext.getTempFileContext(request);
 							for(final Task task : notCached) {
 								concurrentTasks.add(
 									new Callable<StatusResult>() {
 										@Override
 										public StatusResult call() throws TaskException, ServletException, IOException {
 											HttpServletRequest subrequest = new HttpServletSubRequest(threadSafeReq);
-											HttpServletResponse subresponse = new HttpServletSubResponse(threadSafeResp, tempFileList);
+											HttpServletResponse subresponse = new HttpServletSubResponse(threadSafeResp, tempFileContext);
 											return getStatus(
 												servletContext,
 												subrequest,
