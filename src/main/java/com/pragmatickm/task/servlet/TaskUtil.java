@@ -22,6 +22,7 @@
  */
 package com.pragmatickm.task.servlet;
 
+import com.aoindustries.net.DomainName;
 import com.aoindustries.net.Path;
 import com.aoindustries.tempfiles.TempFileContext;
 import com.aoindustries.tempfiles.servlet.ServletTempFileContext;
@@ -85,7 +86,7 @@ final public class TaskUtil {
 	public static TaskLog getTaskLogInDomain(
 		ServletContext servletContext,
 		HttpServletRequest request,
-		String domain,
+		DomainName domain,
 		Path book,
 		String page,
 		String taskId
