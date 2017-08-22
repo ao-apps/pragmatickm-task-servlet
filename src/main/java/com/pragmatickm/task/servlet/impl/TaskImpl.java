@@ -29,9 +29,12 @@ import static com.aoindustries.encoding.TextInXhtmlAttributeEncoder.encodeTextIn
 import static com.aoindustries.encoding.TextInXhtmlAttributeEncoder.textInXhtmlAttributeEncoder;
 import static com.aoindustries.encoding.TextInXhtmlEncoder.encodeTextInXhtml;
 import com.aoindustries.io.buffer.BufferResult;
+import com.aoindustries.net.Path;
 import static com.aoindustries.taglib.AttributeUtils.resolveValue;
 import com.aoindustries.util.CalendarUtils;
+import com.aoindustries.util.WrappedException;
 import com.aoindustries.util.schedule.Recurring;
+import com.aoindustries.validation.ValidationException;
 import com.pragmatickm.task.model.Priority;
 import com.pragmatickm.task.model.Task;
 import com.pragmatickm.task.model.TaskException;
@@ -46,9 +49,9 @@ import com.semanticcms.core.model.NodeBodyWriter;
 import com.semanticcms.core.model.Page;
 import com.semanticcms.core.model.PageRef;
 import com.semanticcms.core.model.ResourceRef;
+import com.semanticcms.core.pages.CaptureLevel;
 import com.semanticcms.core.servlet.Cache;
 import com.semanticcms.core.servlet.CacheFilter;
-import com.semanticcms.core.servlet.CaptureLevel;
 import com.semanticcms.core.servlet.CapturePage;
 import com.semanticcms.core.servlet.CurrentPage;
 import com.semanticcms.core.servlet.PageIndex;
@@ -289,15 +292,17 @@ final public class TaskImpl {
 	 * Gets the file that stores the XML data for a task log.
 	 */
 	public static ResourceRef getTaskLogXmlFile(PageRef pageRef, String taskId) {
-		String xmlFilePath = pageRef.getPath();
-		// TODO: No longer strip these extensions once page refs are fully converted to being the abstract name
-		if(xmlFilePath.endsWith(REMOVE_JSP_EXTENSION)) {
-			xmlFilePath = xmlFilePath.substring(0, xmlFilePath.length() - REMOVE_JSP_EXTENSION.length());
-		} else if(xmlFilePath.endsWith(REMOVE_JSPX_EXTENSION)) {
-			xmlFilePath = xmlFilePath.substring(0, xmlFilePath.length() - REMOVE_JSPX_EXTENSION.length());
+		String xmlFilePath = pageRef.getPath().toString();
+		if(xmlFilePath.endsWith(Path.SEPARATOR_STRING)) {
+			xmlFilePath = xmlFilePath + "index" + TASKLOG_MID + taskId + TASKLOG_EXTENSION;
+		} else {
+			xmlFilePath = xmlFilePath + TASKLOG_MID + taskId + TASKLOG_EXTENSION;
 		}
-		xmlFilePath = xmlFilePath + TASKLOG_MID + taskId + TASKLOG_EXTENSION;
-		return new ResourceRef(pageRef.getBookRef(), xmlFilePath);
+		try {
+			return new ResourceRef(pageRef.getBookRef(), Path.valueOf(xmlFilePath));
+		} catch(ValidationException e) {
+			throw new WrappedException(e);
+		}
 	}
 
 	public static Priority getPriorityForStatus(long now, Task task, StatusResult status) {

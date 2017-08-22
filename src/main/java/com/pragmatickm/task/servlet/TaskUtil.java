@@ -22,6 +22,7 @@
  */
 package com.pragmatickm.task.servlet;
 
+import com.aoindustries.net.Path;
 import com.aoindustries.tempfiles.TempFileContext;
 import com.aoindustries.tempfiles.servlet.ServletTempFileContext;
 import com.aoindustries.util.CalendarUtils;
@@ -45,11 +46,11 @@ import com.semanticcms.core.model.ElementRef;
 import com.semanticcms.core.model.Page;
 import com.semanticcms.core.model.PageRef;
 import com.semanticcms.core.model.ResourceRef;
-import com.semanticcms.core.pages.Book;
+import com.semanticcms.core.pages.CaptureLevel;
 import com.semanticcms.core.resources.ResourceStore;
+import com.semanticcms.core.servlet.Book;
 import com.semanticcms.core.servlet.Cache;
 import com.semanticcms.core.servlet.CacheFilter;
-import com.semanticcms.core.servlet.CaptureLevel;
 import com.semanticcms.core.servlet.CapturePage;
 import com.semanticcms.core.servlet.CountConcurrencyFilter;
 import com.semanticcms.core.servlet.PageRefResolver;
@@ -85,7 +86,7 @@ final public class TaskUtil {
 		ServletContext servletContext,
 		HttpServletRequest request,
 		String domain,
-		String book,
+		Path book,
 		String page,
 		String taskId
 	) throws ServletException, IOException {
@@ -103,7 +104,7 @@ final public class TaskUtil {
 		if(!bookObj.isAccessible()) {
 			throw new IllegalArgumentException("Book is not accessible: " + xmlFile);
 		}
-		ResourceStore resourceStore = bookObj.getResourceStore();
+		ResourceStore resourceStore = bookObj.getResources();
 		if(resourceStore == null) {
 			throw new IllegalArgumentException("Resource store is not available: " + bookRef);
 		}
@@ -119,7 +120,7 @@ final public class TaskUtil {
 	public static TaskLog getTaskLogInBook(
 		ServletContext servletContext,
 		HttpServletRequest request,
-		String book,
+		Path book,
 		String page,
 		String taskId
 	) throws ServletException, IOException {
