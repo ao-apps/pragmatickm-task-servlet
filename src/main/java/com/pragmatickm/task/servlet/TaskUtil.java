@@ -106,7 +106,7 @@ final public class TaskUtil {
 			throw new IllegalArgumentException("Book is not accessible: " + xmlFile);
 		}
 		ResourceStore resourceStore = bookObj.getResources();
-		if(resourceStore == null) {
+		if(!resourceStore.isAvailable()) {
 			throw new IllegalArgumentException("Resource store is not available: " + bookRef);
 		}
 		return TaskLog.getTaskLog(
