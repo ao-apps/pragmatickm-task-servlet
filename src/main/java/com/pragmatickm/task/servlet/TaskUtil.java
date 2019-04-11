@@ -1,6 +1,6 @@
 /*
  * pragmatickm-task-servlet - Tasks nested within SemanticCMS pages and elements in a Servlet environment.
- * Copyright (C) 2013, 2014, 2015, 2016  AO Industries, Inc.
+ * Copyright (C) 2013, 2014, 2015, 2016, 2017, 2018  AO Industries, Inc.
  *     support@aoindustries.com
  *     7262 Bull Pen Cir
  *     Mobile, AL 36695
@@ -22,8 +22,8 @@
  */
 package com.pragmatickm.task.servlet;
 
-import com.aoindustries.io.TempFileList;
-import com.aoindustries.servlet.filter.TempFileContext;
+import com.aoindustries.tempfiles.TempFileContext;
+import com.aoindustries.tempfiles.servlet.ServletTempFileContext;
 import com.aoindustries.util.CalendarUtils;
 import com.aoindustries.util.ComparatorUtils;
 import com.aoindustries.util.StringUtility;
@@ -112,13 +112,22 @@ final public class TaskUtil {
 	}
 
 	public static TaskLog.Entry getMostRecentEntry(TaskLog taskLog, String statuses) throws IOException {
-		List<String> split = StringUtility.splitStringCommaSpace(statuses);
+		String[] trimmed;
+		int size;
+		{
+			List<String> split = StringUtility.splitString(statuses, ','); // Split on comma only, because of "Nothing To Do" status having spaces
+			size = split.size();
+			trimmed = new String[size];
+			for(int i = 0; i < size; i++) {
+				trimmed[i] = split.get(i).trim();
+			}
+		}
 		List<TaskLog.Entry> entries = taskLog.getEntries();
-		for(int i=entries.size()-1; i>=0; i--) {
+		for(int i = entries.size() - 1; i >= 0; i--) {
 			TaskLog.Entry entry = entries.get(i);
 			String label = entry.getStatus().getLabel();
-			for(String status : split) {
-				if(label.equalsIgnoreCase(status)) {
+			for(int j = 0; j < size; j++) {
+				if(label.equalsIgnoreCase(trimmed[j])) {
 					return entry;
 				}
 			}
@@ -426,6 +435,11 @@ final public class TaskUtil {
 			// Recurring task (possibly with null "on" date)
 			final Calendar firstIncomplete;
 			if(relative) {
+				// TODO: When "on" is set today because new task never completed, the status
+				//       should become the highest priority, and the assignments should be to
+				//       all assigned.  In other words: start most severe instead of least, because
+				//       tasks are remaining unfinished due to perpetual "Low" initial priority.
+
 				// Will use "on" or today if no completed tasklog entry
 				Calendar recurringFrom = (on != null) ? on : today;
 				// Schedule from most recent completed tasklog entry
@@ -616,20 +630,20 @@ final public class TaskUtil {
 						notCachedSize > 1
 						&& CountConcurrencyFilter.useConcurrentSubrequests(request)
 					) {
-						System.err.println("notCachedSize = " + notCachedSize + ", doing concurrent getStatus"); // TODO: Remove for production
+						//System.err.println("notCachedSize = " + notCachedSize + ", doing concurrent getStatus");
 						// Concurrent implementation
 						List<Callable<StatusResult>> concurrentTasks = new ArrayList<Callable<StatusResult>>(notCachedSize);
 						{
 							final HttpServletRequest threadSafeReq = new UnmodifiableCopyHttpServletRequest(request);
 							final HttpServletResponse threadSafeResp = new UnmodifiableCopyHttpServletResponse(response);
-							final TempFileList tempFileList = TempFileContext.getTempFileList(request);
+							final TempFileContext tempFileContext = ServletTempFileContext.getTempFileContext(request);
 							for(final Task task : notCached) {
 								concurrentTasks.add(
 									new Callable<StatusResult>() {
 										@Override
 										public StatusResult call() throws TaskException, ServletException, IOException {
 											HttpServletRequest subrequest = new HttpServletSubRequest(threadSafeReq);
-											HttpServletResponse subresponse = new HttpServletSubResponse(threadSafeResp, tempFileList);
+											HttpServletResponse subresponse = new HttpServletSubResponse(threadSafeResp, tempFileContext);
 											return getStatus(
 												servletContext,
 												subrequest,
