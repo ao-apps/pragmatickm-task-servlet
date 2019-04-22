@@ -1,6 +1,6 @@
 /*
  * pragmatickm-task-servlet - Tasks nested within SemanticCMS pages and elements in a Servlet environment.
- * Copyright (C) 2013, 2014, 2015, 2016  AO Industries, Inc.
+ * Copyright (C) 2013, 2014, 2015, 2016, 2019  AO Industries, Inc.
  *     support@aoindustries.com
  *     7262 Bull Pen Cir
  *     Mobile, AL 36695
@@ -151,7 +151,7 @@ final public class TaskImpl {
 				// TODO: Concurrent getDoBefores?
 				Set<ElementRef> doBeforeRefs = task.getDoBefores();
 				int size = doBeforeRefs.size();
-				doBefores = new ArrayList<Task>(size);
+				doBefores = new ArrayList<>(size);
 				// TODO: Concurrent capture here?
 				for(ElementRef doBefore : doBeforeRefs) {
 					Element elem = CapturePage.capturePage(
@@ -172,7 +172,7 @@ final public class TaskImpl {
 			// Lookup all the statuses at once
 			Map<Task,StatusResult> statuses;
 			{
-				Set<Task> allTasks = new HashSet<Task>(
+				Set<Task> allTasks = new HashSet<>(
 					(
 						doBefores.size()
 						+ 1 // this task
