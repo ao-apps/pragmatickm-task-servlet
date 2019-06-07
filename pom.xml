@@ -40,7 +40,7 @@ along with pragmatickm-task-servlet.  If not, see <http://www.gnu.org/licenses /
 		<description.html><![CDATA[Tasks nested within <a target="_top" href="https://semanticcms.com/">SemanticCMS</a> pages and elements in a Servlet environment.]]></description.html>
 	</properties>
 
-	<name>PragmaticKM 2 Task Servlet</name>
+	<name>PragmaticKM Task Servlet²</name>
 	<url>https://pragmatickm.com/task/servlet/</url>
 	<description>Tasks nested within SemanticCMS pages and elements in a Servlet environment.</description>
 	<inceptionYear>2013</inceptionYear>
@@ -63,6 +63,7 @@ along with pragmatickm-task-servlet.  If not, see <http://www.gnu.org/licenses /
 						<configuration>
 							<links>
 								<link>${javac.link.javaApi}</link>
+								<!-- Java EE -->
 								<link>${javac.link.javaeeApi.6}</link>
 							</links>
 						</configuration>
@@ -72,9 +73,20 @@ along with pragmatickm-task-servlet.  If not, see <http://www.gnu.org/licenses /
 		</profile>
 	</profiles>
 
+	<dependencyManagement>
+		<dependencies>
+			<!-- Java EE -->
+			<dependency>
+				<groupId>javax.servlet</groupId><artifactId>javax.servlet-api</artifactId><version>3.0.1</version>
+				<scope>provided</scope>
+			</dependency>
+		</dependencies>
+	</dependencyManagement>
+
 	<dependencies>
+		<!-- Java EE -->
 		<dependency>
-			<groupId>javax.servlet</groupId><artifactId>javax.servlet-api</artifactId><version>3.0.1</version>
+			<groupId>javax.servlet</groupId><artifactId>javax.servlet-api</artifactId>
 			<scope>provided</scope>
 		</dependency>
 	</dependencies>
