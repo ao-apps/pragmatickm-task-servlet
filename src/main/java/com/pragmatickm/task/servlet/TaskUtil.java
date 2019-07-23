@@ -60,6 +60,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.EnumSet;
+import java.util.GregorianCalendar;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -276,7 +277,7 @@ final public class TaskUtil {
 				break;
 			}
 		}
-		final Calendar today = CalendarUtils.getToday();
+		final GregorianCalendar today = CalendarUtils.getToday();
 		final long todayMillis = today.getTimeInMillis();
 		TaskLog taskLog = task.getTaskLog();
 		if(on==null && recurring==null) {

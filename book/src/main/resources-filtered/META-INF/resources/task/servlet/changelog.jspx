@@ -36,7 +36,7 @@ along with pragmatickm-task-servlet.  If not, see <http://www.gnu.org/licenses /
 		shortTitle="Changelog"
 		tocLevels="1"
 		datePublished="2017-07-25T18:14:05-0500"
-		dateModified="2019-06-24T01:20:14-0500"
+		dateModified="2019-07-22T19:55:09-0500"
 	>
 		<!-- The current snapshot, unreleased version -->
 		<c:set var="version" value="@{com.pragmatickm:pragmatickm-task-servlet:pom.version}" />
@@ -51,7 +51,11 @@ along with pragmatickm-task-servlet.  If not, see <http://www.gnu.org/licenses /
 				groupId="@{documented.groupId}"
 				artifactId="@{documented.artifactId}"
 				scmUrl="@{documented.scm.url}"
-			/>
+			>
+				<ul>
+					<li>Rebuild for breaking change in <code>CalendarUtils</code>.</li>
+				</ul>
+			</changelog:release>
 		</c:if>
 
 		<changelog:release
