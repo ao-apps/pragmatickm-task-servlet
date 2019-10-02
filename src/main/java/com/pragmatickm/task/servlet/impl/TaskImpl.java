@@ -29,8 +29,7 @@ import static com.aoindustries.encoding.TextInXhtmlAttributeEncoder.encodeTextIn
 import static com.aoindustries.encoding.TextInXhtmlAttributeEncoder.textInXhtmlAttributeEncoder;
 import static com.aoindustries.encoding.TextInXhtmlEncoder.encodeTextInXhtml;
 import com.aoindustries.io.buffer.BufferResult;
-import com.aoindustries.servlet.ServletUtil;
-import com.aoindustries.servlet.URIComponent;
+import com.aoindustries.net.URIEncoder;
 import static com.aoindustries.taglib.AttributeUtils.resolveValue;
 import com.aoindustries.util.CalendarUtils;
 import com.aoindustries.util.schedule.Recurring;
@@ -356,28 +355,26 @@ final public class TaskImpl {
 				if(index != null) {
 					// view=all mode
 					out.write('#');
-					URIComponent.FRAGMENT.encode(
+					URIEncoder.encodeURIComponent(
 						PageIndex.getRefId(
 							index,
 							task.getId()
 						),
-						response,
 						out,
 						textInXhtmlAttributeEncoder
 					);
 				} else if(taskPage.equals(currentPage)) {
 					// Task on this page, generate anchor-only link
 					encodeTextInXhtmlAttribute('#', out);
-					URIComponent.FRAGMENT.encode(task.getId(), response, out, textInXhtmlAttributeEncoder);
+					URIEncoder.encodeURIComponent(task.getId(), out, textInXhtmlAttributeEncoder);
 				} else {
 					// Task on other page, generate full link
 					encodeTextInXhtmlAttribute(
 						response.encodeURL(
-							ServletUtil.encodeURI(
+							URIEncoder.encodeURI(
 								request.getContextPath()
 								+ taskPage.getPageRef().getServletPath()
-								+ '#' + URIComponent.FRAGMENT.encode(task.getId(), response),
-								response
+								+ '#' + URIEncoder.encodeURIComponent(task.getId())
 							)
 						),
 						out
