@@ -28,6 +28,8 @@ import com.aoindustries.encoding.TextInXhtmlAttributeEncoder;
 import static com.aoindustries.encoding.TextInXhtmlAttributeEncoder.encodeTextInXhtmlAttribute;
 import static com.aoindustries.encoding.TextInXhtmlAttributeEncoder.textInXhtmlAttributeEncoder;
 import static com.aoindustries.encoding.TextInXhtmlEncoder.encodeTextInXhtml;
+import com.aoindustries.html.Html;
+import com.aoindustries.html.servlet.HtmlEE;
 import com.aoindustries.io.buffer.BufferResult;
 import com.aoindustries.net.URIEncoder;
 import static com.aoindustries.taglib.AttributeUtils.resolveValue;
@@ -84,7 +86,7 @@ final public class TaskImpl {
 		}
 	}
 
-	private static void writeRow(String header, List<?> values, Writer out) throws IOException {
+	private static void writeRow(String header, List<?> values, Writer out, Html html) throws IOException {
 		if(values != null) {
 			int size = values.size();
 			if(size > 0) {
@@ -93,7 +95,9 @@ final public class TaskImpl {
 				out.write("</th><td colspan=\"3\">");
 				for(int i=0; i<size; i++) {
 					encodeTextInXhtml(values.get(i).toString(), out);
-					if(i != (size - 1)) out.write("<br />");
+					if(i != (size - 1)) {
+						html.br__();
+					}
 				}
 				out.write("</td></tr>\n");
 			}
@@ -145,6 +149,7 @@ final public class TaskImpl {
 		}
 
 		if(captureLevel == CaptureLevel.BODY) {
+			Html html = HtmlEE.get(servletContext, request, out);
 			Cache cache = CacheFilter.getCache(request);
 			// Capture the doBefores
 			List<Task> doBefores;
@@ -242,7 +247,7 @@ final public class TaskImpl {
 			}
 			writeRow(recurring==null ? "On:" : "Starting:", task.getOn(), out);
 			writeRow("Recurring:", recurring, relative, out);
-			writeRow("Assigned To:", task.getAssignedTo(), out);
+			writeRow("Assigned To:", task.getAssignedTo(), out, html);
 			writeRow("Pay:", task.getPay(), out);
 			writeRow("Cost:", task.getCost(), out);
 			writeTasks(servletContext, request, response, out, cache, currentPage, now, doAfters, statuses, "Do After:");
