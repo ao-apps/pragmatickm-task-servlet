@@ -1,6 +1,6 @@
 /*
  * pragmatickm-task-servlet - Tasks nested within SemanticCMS pages and elements in a Servlet environment.
- * Copyright (C) 2013, 2014, 2015, 2016, 2017, 2018, 2019  AO Industries, Inc.
+ * Copyright (C) 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020  AO Industries, Inc.
  *     support@aoindustries.com
  *     7262 Bull Pen Cir
  *     Mobile, AL 36695
@@ -50,7 +50,7 @@ import com.semanticcms.core.servlet.Cache;
 import com.semanticcms.core.servlet.CacheFilter;
 import com.semanticcms.core.servlet.CaptureLevel;
 import com.semanticcms.core.servlet.CapturePage;
-import com.semanticcms.core.servlet.CountConcurrencyListener;
+import com.semanticcms.core.servlet.ConcurrencyController;
 import com.semanticcms.core.servlet.PageRefResolver;
 import com.semanticcms.core.servlet.SemanticCMS;
 import java.io.IOException;
@@ -628,7 +628,7 @@ final public class TaskUtil {
 					assert notCachedSize > 0;
 					if(
 						notCachedSize > 1
-						&& CountConcurrencyListener.useConcurrentSubrequests(request)
+						&& ConcurrencyController.useConcurrentSubrequests(request)
 					) {
 						//System.err.println("notCachedSize = " + notCachedSize + ", doing concurrent getStatus");
 						// Concurrent implementation
