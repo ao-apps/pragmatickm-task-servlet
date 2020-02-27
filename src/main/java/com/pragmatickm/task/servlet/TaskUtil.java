@@ -50,7 +50,7 @@ import com.semanticcms.core.servlet.Cache;
 import com.semanticcms.core.servlet.CacheFilter;
 import com.semanticcms.core.servlet.CaptureLevel;
 import com.semanticcms.core.servlet.CapturePage;
-import com.semanticcms.core.servlet.ConcurrencyController;
+import com.semanticcms.core.servlet.ConcurrencyCoordinator;
 import com.semanticcms.core.servlet.PageRefResolver;
 import com.semanticcms.core.servlet.SemanticCMS;
 import java.io.IOException;
@@ -138,16 +138,11 @@ final public class TaskUtil {
 	private static final String GET_STATUS_CACHE_KEY = TaskUtil.class.getName() + ".getStatus";
 
 	@SuppressWarnings("unchecked")
-	private static Map<Task,StatusResult> getStatusCache(final Cache cache) {
+	private static Map<Task,StatusResult> getStatusCache(Cache cache) {
 		return cache.getAttribute(
 			GET_STATUS_CACHE_KEY,
 			Map.class,
-			new Cache.Callable<Map<Task,StatusResult>, RuntimeException>() {
-				@Override
-				public Map<Task, StatusResult> call() throws RuntimeException {
-					return cache.newMap();
-				}
-			}
+			() -> cache.newMap()
 		);
 	}
 
@@ -628,7 +623,7 @@ final public class TaskUtil {
 					assert notCachedSize > 0;
 					if(
 						notCachedSize > 1
-						&& ConcurrencyController.useConcurrentSubrequests(request)
+						&& ConcurrencyCoordinator.useConcurrentSubrequests(request)
 					) {
 						//System.err.println("notCachedSize = " + notCachedSize + ", doing concurrent getStatus");
 						// Concurrent implementation
