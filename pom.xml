@@ -78,7 +78,6 @@ along with pragmatickm-task-servlet.  If not, see <http://www.gnu.org/licenses /
 								<link>https://aoindustries.com/ao-net-types/apidocs/</link>
 								<link>https://aoindustries.com/ao-servlet-subrequest/apidocs/</link>
 								<link>https://aoindustries.com/ao-servlet-util/apidocs/</link>
-								<link>https://aoindustries.com/ao-style/apidocs/</link>
 								<link>https://aoindustries.com/ao-taglib/apidocs/</link>
 								<link>https://aoindustries.com/ao-tempfiles/apidocs/</link>
 								<link>https://aoindustries.com/ao-tempfiles/servlet/apidocs/</link>
@@ -128,9 +127,6 @@ along with pragmatickm-task-servlet.  If not, see <http://www.gnu.org/licenses /
 				<groupId>com.aoindustries</groupId><artifactId>ao-servlet-util</artifactId><version>2.0.0${POST-SNAPSHOT}</version>
 			</dependency>
 			<dependency>
-				<groupId>com.aoindustries</groupId><artifactId>ao-style</artifactId><version>1.0.0${POST-SNAPSHOT}</version>
-			</dependency>
-			<dependency>
 				<groupId>com.aoindustries</groupId><artifactId>ao-taglib</artifactId><version>5.0.0${POST-SNAPSHOT}</version>
 			</dependency>
 			<dependency>
@@ -150,6 +146,10 @@ along with pragmatickm-task-servlet.  If not, see <http://www.gnu.org/licenses /
 			</dependency>
 			<dependency>
 				<groupId>com.semanticcms</groupId><artifactId>semanticcms-core-servlet</artifactId><version>1.15.0${POST-SNAPSHOT}</version>
+			</dependency>
+			<!-- Runtime Direct -->
+			<dependency>
+				<groupId>com.aoindustries</groupId><artifactId>ao-style</artifactId><version>1.0.0${POST-SNAPSHOT}</version>
 			</dependency>
 		</dependencies>
 	</dependencyManagement>
@@ -190,9 +190,6 @@ along with pragmatickm-task-servlet.  If not, see <http://www.gnu.org/licenses /
 			<groupId>com.aoindustries</groupId><artifactId>ao-servlet-util</artifactId>
 		</dependency>
 		<dependency>
-			<groupId>com.aoindustries</groupId><artifactId>ao-style</artifactId>
-		</dependency>
-		<dependency>
 			<groupId>com.aoindustries</groupId><artifactId>ao-taglib</artifactId>
 		</dependency>
 		<dependency>
@@ -212,6 +209,11 @@ along with pragmatickm-task-servlet.  If not, see <http://www.gnu.org/licenses /
 		</dependency>
 		<dependency>
 			<groupId>com.semanticcms</groupId><artifactId>semanticcms-core-servlet</artifactId>
+		</dependency>
+		<!-- Runtime Direct -->
+		<dependency>
+			<groupId>com.aoindustries</groupId><artifactId>ao-style</artifactId>
+			<scope>runtime</scope>
 		</dependency>
 	</dependencies>
 </project>
