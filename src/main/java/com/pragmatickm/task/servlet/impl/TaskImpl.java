@@ -22,6 +22,7 @@
  */
 package com.pragmatickm.task.servlet.impl;
 
+import com.aoindustries.collections.AoCollections;
 import com.aoindustries.encoding.Coercion;
 import com.aoindustries.encoding.MediaWriter;
 import com.aoindustries.encoding.TextInXhtmlAttributeEncoder;
@@ -55,7 +56,6 @@ import com.semanticcms.core.servlet.SemanticCMS;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Calendar;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -174,12 +174,10 @@ final public class TaskImpl {
 			// Lookup all the statuses at once
 			Map<Task,StatusResult> statuses;
 			{
-				Set<Task> allTasks = new HashSet<>(
-					(
-						doBefores.size()
-						+ 1 // this task
-						+ doAfters.size()
-					) *4/3+1
+				Set<Task> allTasks = AoCollections.newHashSet(
+					doBefores.size()
+					+ 1 // this task
+					+ doAfters.size()
 				);
 				allTasks.addAll(doBefores);
 				allTasks.add(task);
