@@ -23,13 +23,13 @@
 package com.pragmatickm.task.servlet.impl;
 
 import com.aoindustries.collections.AoCollections;
-import com.aoindustries.encoding.Coercion;
 import com.aoindustries.encoding.MediaWriter;
 import com.aoindustries.encoding.TextInXhtmlAttributeEncoder;
 import static com.aoindustries.encoding.TextInXhtmlAttributeEncoder.encodeTextInXhtmlAttribute;
 import static com.aoindustries.encoding.TextInXhtmlAttributeEncoder.textInXhtmlAttributeEncoder;
 import com.aoindustries.html.Html;
 import com.aoindustries.io.buffer.BufferResult;
+import com.aoindustries.lang.Coercion;
 import com.aoindustries.net.URIEncoder;
 import static com.aoindustries.taglib.AttributeUtils.resolveValue;
 import com.aoindustries.util.CalendarUtils;
