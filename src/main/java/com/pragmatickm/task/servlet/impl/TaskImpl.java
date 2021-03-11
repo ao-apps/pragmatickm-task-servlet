@@ -23,6 +23,7 @@
 package com.pragmatickm.task.servlet.impl;
 
 import com.aoindustries.collections.AoCollections;
+import com.aoindustries.html.AnyDocument;
 import com.aoindustries.html.PalpableContent;
 import com.aoindustries.html.TABLE_c;
 import com.aoindustries.html.TBODY_c;
@@ -71,7 +72,7 @@ final public class TaskImpl {
 	private static final String TASKLOG_MID = "-tasklog-";
 	private static final String TASKLOG_EXTENSION = ".xml";
 
-	private static void writeRow(String header, String value, TR_factory<?> factory) throws IOException {
+	private static void writeRow(String header, String value, TR_factory<?, ?> factory) throws IOException {
 		if(value != null) {
 			factory.tr__(tr -> tr
 				.th__(header)
@@ -80,7 +81,7 @@ final public class TaskImpl {
 		}
 	}
 
-	private static void writeRow(String header, List<?> values, TR_factory<?> factory) throws IOException {
+	private static void writeRow(String header, List<?> values, TR_factory<?, ?> factory) throws IOException {
 		if(values != null) {
 			int size = values.size();
 			if(size > 0) {
@@ -97,11 +98,11 @@ final public class TaskImpl {
 		}
 	}
 
-	private static void writeRow(String header, Calendar date, TR_factory<?> factory) throws IOException {
+	private static void writeRow(String header, Calendar date, TR_factory<?, ?> factory) throws IOException {
 		if(date != null) writeRow(header, CalendarUtils.formatDate(date), factory);
 	}
 
-	private static void writeRow(String header, Recurring recurring, boolean relative, TR_factory<?> factory) throws IOException {
+	private static void writeRow(String header, Recurring recurring, boolean relative, TR_factory<?, ?> factory) throws IOException {
 		if(recurring != null) {
 			writeRow(
 				header,
@@ -118,7 +119,10 @@ final public class TaskImpl {
 	 *          {@link #writeAfterBody(com.pragmatickm.task.model.Task, com.aoindustries.html.TBODY_c, com.semanticcms.core.model.ElementContext)}.
 	 *          For all other capture levels returns {@code null}.
 	 */
-	public static <__ extends PalpableContent<__>> TBODY_c<TABLE_c<__>> writeBeforeBody(
+	public static <
+		D extends AnyDocument<D>,
+		__ extends PalpableContent<D, __>
+	> TBODY_c<D, TABLE_c<D, __>> writeBeforeBody(
 		ServletContext servletContext,
 		HttpServletRequest request,
 		HttpServletResponse response,
@@ -173,7 +177,7 @@ final public class TaskImpl {
 			// Find the doAfters
 			List<Task> doAfters = TaskUtil.getDoAfters(servletContext, request, response, task);
 			// Lookup all the statuses at once
-			Map<Task,StatusResult> statuses;
+			Map<Task, StatusResult> statuses;
 			{
 				Set<Task> allTasks = AoCollections.newHashSet(
 					doBefores.size()
@@ -187,7 +191,7 @@ final public class TaskImpl {
 			}
 			// Write the task itself to this page
 			final PageIndex pageIndex = PageIndex.getCurrentPageIndex(request);
-			TBODY_c<TABLE_c<__>> tbody = palpable.table()
+			TBODY_c<D, TABLE_c<D, __>> tbody = palpable.table()
 				.id(idAttr -> PageIndex.appendIdInPage(
 					pageIndex,
 					currentPage,
@@ -249,7 +253,10 @@ final public class TaskImpl {
 	 * @return  The tbody, which may be used to write additional content and must be passed onto
 	 *          {@link #writeAfterBody(com.pragmatickm.task.model.Task, com.aoindustries.html.TBODY_c, com.semanticcms.core.model.ElementContext)}.
 	 */
-	public static <__ extends PalpableContent<__>> TBODY_c<TABLE_c<__>> writeBeforeBody(
+	public static <
+		D extends AnyDocument<D>,
+		__ extends PalpableContent<D, __>
+	> TBODY_c<D, TABLE_c<D, __>> writeBeforeBody(
 		ServletContext servletContext,
 		ELContext elContext,
 		HttpServletRequest request,
@@ -270,7 +277,10 @@ final public class TaskImpl {
 		);
 	}
 
-	public static <__ extends PalpableContent<__>> void writeAfterBody(Task task, TBODY_c<TABLE_c<__>> tbody, ElementContext context) throws IOException {
+	public static <
+		D extends AnyDocument<D>,
+		__ extends PalpableContent<D, __>
+	> void writeAfterBody(Task task, TBODY_c<D, TABLE_c<D, __>> tbody, ElementContext context) throws IOException {
 				BufferResult body = task.getBody();
 				if(body.getLength() > 0) {
 					tbody.tr__(tr -> tr
@@ -310,12 +320,12 @@ final public class TaskImpl {
 		ServletContext servletContext,
 		HttpServletRequest request,
 		HttpServletResponse response,
-		TR_factory<?> factory,
+		TR_factory<?, ?> factory,
 		Cache cache, // TODO: Unused
 		Page currentPage,
 		long now,
 		List<? extends Task> tasks,
-		Map<Task,StatusResult> statuses,
+		Map<Task, StatusResult> statuses,
 		String label
 	) throws ServletException, IOException, TaskException {
 		int size = tasks.size();
