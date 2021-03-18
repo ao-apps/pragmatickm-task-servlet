@@ -275,7 +275,7 @@ final public class TaskImpl {
 				if(body.getLength() > 0) {
 					tbody.tr__any(tr -> tr
 						.td().colspan(4).__(td ->
-							body.writeTo(new NodeBodyWriter(task, td.getDocument().getUnsafe(), context))
+							body.writeTo(new NodeBodyWriter(task, td.getUnsafe(), context))
 						)
 					);
 				}
