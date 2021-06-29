@@ -33,6 +33,7 @@ along with pragmatickm-task-servlet.  If not, see <http://www.gnu.org/licenses /
 	<packaging>bundle</packaging>
 
 	<properties>
+		<module.name>com.pragmatickm.task.servlet</module.name>
 		<javadoc.breadcrumbs><![CDATA[<a target="${javadoc.target}" href="https://pragmatickm.com/">PragmaticKM</a>
 / <a target="${javadoc.target}" href="https://pragmatickm.com/task/">Task</a>
 / <a target="${javadoc.target}" href="${project.url}">Servlet</a>]]></javadoc.breadcrumbs>
