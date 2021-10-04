@@ -64,7 +64,7 @@ import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
-final public class TaskImpl {
+public final class TaskImpl {
 
 	private static final String REMOVE_JSP_EXTENSION = ".jsp";
 	private static final String REMOVE_JSPX_EXTENSION = ".jspx";
