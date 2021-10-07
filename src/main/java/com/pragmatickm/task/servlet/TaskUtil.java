@@ -142,7 +142,7 @@ public final class TaskUtil {
 		return cache.getAttribute(
 			GET_STATUS_CACHE_KEY,
 			Map.class,
-			() -> cache.newMap()
+			cache::newMap
 		);
 	}
 
@@ -1040,7 +1040,7 @@ public final class TaskUtil {
 		Map<PageUserKey, V> pageUserCache = cache.getAttribute(
 			key,
 			Map.class,
-			() -> cache.newMap()
+			cache::newMap
 		);
 		return pageUserCache;
 	}
