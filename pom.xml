@@ -375,7 +375,7 @@ along with pragmatickm-task-servlet.  If not, see <http://www.gnu.org/licenses /
 				<groupId>com.pragmatickm</groupId><artifactId>pragmatickm-task-model</artifactId><version>1.6.2-SNAPSHOT<!-- ${POST-SNAPSHOT} --></version>
 			</dependency>
 			<dependency>
-				<groupId>com.semanticcms</groupId><artifactId>semanticcms-core-model</artifactId><version>1.14.1-SNAPSHOT<!-- ${POST-SNAPSHOT} --></version>
+				<groupId>com.semanticcms</groupId><artifactId>semanticcms-core-model</artifactId><version>1.14.1${POST-SNAPSHOT}</version>
 			</dependency>
 			<dependency>
 				<groupId>com.semanticcms</groupId><artifactId>semanticcms-core-servlet</artifactId><version>1.18.1-SNAPSHOT<!-- ${POST-SNAPSHOT} --></version>
