@@ -410,7 +410,7 @@ along with pragmatickm-task-servlet.  If not, see <http://www.gnu.org/licenses /
 			</dependency>
 			<!-- javaee-web-api-bom: <groupId>javax.servlet.jsp</groupId><artifactId>javax.servlet.jsp-api</artifactId> -->
 			<dependency>
-				<groupId>joda-time</groupId><artifactId>joda-time</artifactId><version>2.10.12</version>
+				<groupId>joda-time</groupId><artifactId>joda-time</artifactId><version>2.10.13</version>
 			</dependency>
 			<!-- Runtime Direct -->
 			<dependency>
