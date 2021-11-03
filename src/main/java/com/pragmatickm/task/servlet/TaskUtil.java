@@ -636,20 +636,18 @@ public final class TaskUtil {
 							final HttpServletResponse threadSafeResp = new UnmodifiableCopyHttpServletResponse(response);
 							final TempFileContext tempFileContext = TempFileContextEE.get(request);
 							for(final Task task : notCached) {
-								concurrentTasks.add(
-									(Callable<StatusResult>) () -> {
-										HttpServletRequest subrequest = new HttpServletSubRequest(threadSafeReq);
-										HttpServletResponse subresponse = new HttpServletSubResponse(threadSafeResp, tempFileContext);
-										return getStatus(
-											servletContext,
-											subrequest,
-											subresponse,
-											task,
-											cache,
-											statusCache
-										);
-									}
-								);
+								concurrentTasks.add((Callable<StatusResult>) () -> {
+									HttpServletRequest subrequest = new HttpServletSubRequest(threadSafeReq);
+									HttpServletResponse subresponse = new HttpServletSubResponse(threadSafeResp, tempFileContext);
+									return getStatus(
+										servletContext,
+										subrequest,
+										subresponse,
+										task,
+										cache,
+										statusCache
+									);
+								});
 							}
 						}
 						List<StatusResult> concurrentResults;
@@ -738,8 +736,8 @@ public final class TaskUtil {
 				}
 				return null;
 			},
-			(Page page) -> page.getChildRefs(),
-			(PageRef childPage) -> childPage.getBook() != null,
+			Page::getChildRefs,
+			childPage -> childPage.getBook() != null,
 			null
 		);
 		return Collections.unmodifiableList(doAfters);
@@ -821,8 +819,8 @@ public final class TaskUtil {
 						throw new ServletException(e);
 					}
 				},
-				(Page page) -> page.getChildRefs(),
-				(PageRef childPage) -> childPage.getBook() != null,
+				Page::getChildRefs,
+				childPage -> childPage.getBook() != null,
 				null
 			);
 			// Wrap any with size of 2 or more with unmodifiable, 0 and 1 already are unmodifiable
@@ -965,7 +963,7 @@ public final class TaskUtil {
 		List<Task> sortedTasks = new ArrayList<>(tasks);
 		Collections.sort(
 			sortedTasks,
-			new Comparator<Task>() {
+			new Comparator<>() {
 				private int dateDiff(Task t1, Task t2) throws TaskException, ServletException, IOException {
 					// Sort by scheduled or unscheduled
 					StatusResult status1 = getStatus(servletContext, request, response, t1, cache, statusCache);
@@ -1085,9 +1083,9 @@ public final class TaskUtil {
 					}
 					return null;
 				},
-				(Page page) -> page.getChildRefs(),
+				Page::getChildRefs,
 				// Child not in missing book
-				(PageRef childPage) -> childPage.getBook() != null,
+				childPage -> childPage.getBook() != null,
 				null
 			);
 			results = Collections.unmodifiableList(allTasks);
@@ -1118,7 +1116,7 @@ public final class TaskUtil {
 				response,
 				page,
 				CaptureLevel.META,
-				(Page p) -> {
+				p -> {
 					try {
 						for(Element element : p.getElements()) {
 							if(element instanceof Task) {
@@ -1213,9 +1211,9 @@ public final class TaskUtil {
 						throw new ServletException(e);
 					}
 				},
-				(Page p) -> p.getChildRefs(),
+				Page::getChildRefs,
 				// Child not in missing book
-				(PageRef childPage) -> childPage.getBook() != null
+				childPage -> childPage.getBook() != null
 			) != null;
 			hasAssignedTaskCache.put(cacheKey, result);
 		}
@@ -1294,9 +1292,9 @@ public final class TaskUtil {
 						throw new ServletException(e);
 					}
 				},
-				(Page page) -> page.getChildRefs(),
+				Page::getChildRefs,
 				// Child not in missing book
-				(PageRef childPage) -> childPage.getBook() != null,
+				childPage -> childPage.getBook() != null,
 				null
 			);
 			results = Collections.unmodifiableList(readyTasks);
@@ -1378,9 +1376,9 @@ public final class TaskUtil {
 						throw new ServletException(e);
 					}
 				},
-				(Page page) -> page.getChildRefs(),
+				Page::getChildRefs,
 				// Child not in missing book
-				(PageRef childPage) -> childPage.getBook() != null,
+				childPage -> childPage.getBook() != null,
 				null
 			);
 			results = Collections.unmodifiableList(blockedTasks);
@@ -1452,9 +1450,9 @@ public final class TaskUtil {
 						throw new ServletException(e);
 					}
 				},
-				(Page page) -> page.getChildRefs(),
+				Page::getChildRefs,
 				// Child not in missing book
-				(PageRef childPage) -> childPage.getBook() != null,
+				childPage -> childPage.getBook() != null,
 				null
 			);
 			results = Collections.unmodifiableList(futureTasks);
