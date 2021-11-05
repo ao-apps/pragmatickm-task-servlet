@@ -75,7 +75,10 @@ import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
-public final class TaskUtil {
+public abstract class TaskUtil {
+
+	/** Make no instances. */
+	private TaskUtil() {throw new AssertionError();}
 
 	public static TaskLog getTaskLogInBook(
 		ServletContext servletContext,
@@ -1459,11 +1462,5 @@ public final class TaskUtil {
 			futureTasksCache.put(cacheKey, results);
 		}
 		return results;
-	}
-
-	/**
-	 * Make no instances.
-	 */
-	private TaskUtil() {
 	}
 }

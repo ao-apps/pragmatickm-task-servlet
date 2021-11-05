@@ -64,7 +64,10 @@ import javax.servlet.ServletException;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
-public final class TaskImpl {
+public abstract class TaskImpl {
+
+	/** Make no instances. */
+	private TaskImpl() {throw new AssertionError();}
 
 	private static final String REMOVE_JSP_EXTENSION = ".jsp";
 	private static final String REMOVE_JSPX_EXTENSION = ".jspx";
@@ -372,11 +375,5 @@ public final class TaskImpl {
 				});
 			}
 		}
-	}
-
-	/**
-	 * Make no instances.
-	 */
-	private TaskImpl() {
 	}
 }
