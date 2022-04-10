@@ -52,6 +52,7 @@ import com.semanticcms.core.servlet.CurrentPage;
 import com.semanticcms.core.servlet.PageIndex;
 import com.semanticcms.core.servlet.SemanticCMS;
 import java.io.IOException;
+import java.io.Writer;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.List;
@@ -209,7 +210,7 @@ public final class TaskImpl {
 				)
 				.tbody_c();
 					final long now = System.currentTimeMillis();
-					writeTasks(servletContext, request, response, tbody, cache, currentPage, now, doBefores, statuses, "Do Before:");
+					writeTasks(servletContext, request, response, tbody, currentPage, now, doBefores, statuses, "Do Before:");
 					StatusResult status = statuses.get(task);
 					tbody.tr__any(tr -> tr
 						.th__("Status:")
@@ -239,7 +240,7 @@ public final class TaskImpl {
 					writeRow("Assigned To:", task.getAssignedTo(), tbody);
 					writeRow("Pay:", task.getPay(), tbody);
 					writeRow("Cost:", task.getCost(), tbody);
-					writeTasks(servletContext, request, response, tbody, cache, currentPage, now, doAfters, statuses, "Do After:");
+					writeTasks(servletContext, request, response, tbody, currentPage, now, doAfters, statuses, "Do After:");
 			return tbody;
 		} else {
 			return null;
@@ -277,9 +278,11 @@ public final class TaskImpl {
 				BufferResult body = task.getBody();
 				if(body.getLength() > 0) {
 					tbody.tr__any(tr -> tr
-						.td().colspan(4).__(td ->
-							body.writeTo(new NodeBodyWriter(task, td.getUnsafe(), context))
-						)
+						.td().colspan(4).__(td -> {
+							@SuppressWarnings("deprecation")
+							Writer unsafe = td.getRawUnsafe();
+							body.writeTo(new NodeBodyWriter(task, unsafe, context));
+						})
 					);
 				}
 				tbody
@@ -314,7 +317,6 @@ public final class TaskImpl {
 		HttpServletRequest request,
 		HttpServletResponse response,
 		AnyUnion_TBODY_THEAD_TFOOT<?, ?> content,
-		Cache cache, // TODO: Unused
 		Page currentPage,
 		long now,
 		List<? extends Task> tasks,
