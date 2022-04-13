@@ -322,7 +322,7 @@ public final class TaskImpl {
 		List<? extends Task> tasks,
 		Map<Task, StatusResult> statuses,
 		String label
-	) throws ServletException, IOException, TaskException {
+	) throws IOException {
 		int size = tasks.size();
 		if(size > 0) {
 			SemanticCMS semanticCMS = SemanticCMS.getInstance(servletContext);
