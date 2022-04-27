@@ -22,4 +22,4 @@
  */
 module com.pragmatickm.task.servlet {
   exports com.pragmatickm.task.servlet;
-}
+} // TODO: Avoiding rewrite-maven-plugin-4.22.2 truncation
