@@ -46,7 +46,7 @@ along with pragmatickm-task-servlet.  If not, see <https://www.gnu.org/licenses/
     <sonar.coverage.exclusions>**.*</sonar.coverage.exclusions>
   </properties>
 
-  <name>PragmaticKM Task Servlet²</name>
+  <name>PragmaticKM Task Servlet</name>
   <url>https://pragmatickm.com/task/servlet/</url>
   <description>Tasks nested within SemanticCMS pages and elements in a Servlet environment.</description>
   <inceptionYear>2013</inceptionYear>
