@@ -21,8 +21,6 @@
  * along with pragmatickm-task-servlet.  If not, see <https://www.gnu.org/licenses/>.
  */
 module com.pragmatickm.task.servlet {
-  exports com.pragmatickm.task.servlet;
-  exports com.pragmatickm.task.servlet.impl;
   // Direct
   requires com.aoapps.collections; // <groupId>com.aoapps</groupId><artifactId>ao-collections</artifactId>
   requires com.aoapps.concurrent; // <groupId>com.aoapps</groupId><artifactId>ao-concurrent</artifactId>
@@ -41,4 +39,7 @@ module com.pragmatickm.task.servlet {
   requires com.pragmatickm.task.model; // <groupId>com.pragmatickm</groupId><artifactId>pragmatickm-task-model</artifactId>
   requires com.semanticcms.core.model; // <groupId>com.semanticcms</groupId><artifactId>semanticcms-core-model</artifactId>
   requires com.semanticcms.core.servlet; // <groupId>com.semanticcms</groupId><artifactId>semanticcms-core-servlet</artifactId>
+
+  exports com.pragmatickm.task.servlet;
+  exports com.pragmatickm.task.servlet.impl;
 }
